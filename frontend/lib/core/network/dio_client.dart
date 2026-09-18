@@ -1,15 +1,43 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:scanserve/core/constants/api_constants.dart';
+import 'package:scanserve/core/network/token_storage.dart';
 
-/// Riverpod provider exposing a configured [Dio] instance for the app.
+/// Base URL for the ScanServe API.
+const String kApiBaseUrl = String.fromEnvironment(
+  'API_BASE_URL',
+  defaultValue: 'http://localhost:5000/api',
+);
+
+/// Overridden in main.dart once SharedPreferences has loaded, since
+/// that load is async and providers are constructed synchronously.
+final tokenStorageProvider = Provider<TokenStorage>((ref) {
+  throw UnimplementedError('tokenStorageProvider must be overridden in main.dart');
+});
+
+/// Riverpod provider exposing a configured [Dio] instance for the whole app.
+/// Every request automatically carries the stored JWT (if any) as a
+/// Bearer token - individual API calls never need to attach it themselves.
 final dioProvider = Provider<Dio>((ref) {
+  final tokenStorage = ref.watch(tokenStorageProvider);
+
   final dio = Dio(
     BaseOptions(
-      baseUrl: ApiConstants.baseUrl,
+      baseUrl: kApiBaseUrl,
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 10),
       headers: {'Content-Type': 'application/json'},
+    ),
+  );
+
+  dio.interceptors.add(
+    InterceptorsWrapper(
+      onRequest: (options, handler) {
+        final token = tokenStorage.token;
+        if (token != null) {
+          options.headers['Authorization'] = 'Bearer $token';
+        }
+        handler.next(options);
+      },
     ),
   );
 

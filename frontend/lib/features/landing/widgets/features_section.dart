@@ -12,14 +12,10 @@ class _Feature {
 }
 
 const _features = [
-  _Feature(Icons.qr_code_2_rounded, 'Instant QR Menus',
-      'Generate a scannable menu for every table in seconds.'),
-  _Feature(Icons.restaurant_menu_rounded, 'Live Menu Editing',
-      'Update dishes, prices, and availability without reprinting anything.'),
-  _Feature(Icons.table_bar_rounded, 'Table Ordering',
-      'Customers order directly from their phone at the table.'),
-  _Feature(Icons.devices_rounded, 'Works Everywhere',
-      'A responsive experience across desktop, tablet, and mobile.'),
+  _Feature(Icons.qr_code_2_rounded, 'Instant QR Menus', 'Generate a scannable menu for every table in seconds.'),
+  _Feature(Icons.restaurant_menu_rounded, 'Live Menu Editing', 'Update dishes, prices, and availability without reprinting anything.'),
+  _Feature(Icons.table_bar_rounded, 'Table Ordering', 'Customers order directly from their phone at the table.'),
+  _Feature(Icons.devices_rounded, 'Works Everywhere', 'A responsive experience across desktop, tablet, and mobile.'),
 ];
 
 class FeaturesSection extends StatelessWidget {
@@ -37,7 +33,7 @@ class FeaturesSection extends StatelessWidget {
       backgroundColor: AppColors.background,
       child: Column(
         children: [
-          const Text('Features', style: AppTextStyles.displayMedium),
+          Text('Features', style: AppTextStyles.displayMedium),
           const SizedBox(height: 40),
           GridView.builder(
             shrinkWrap: true,
@@ -49,8 +45,7 @@ class FeaturesSection extends StatelessWidget {
               crossAxisSpacing: 20,
               childAspectRatio: columns == 1 ? 2.4 : 1.1,
             ),
-            itemBuilder: (context, index) =>
-                _FeatureCard(feature: _features[index]),
+            itemBuilder: (context, index) => _FeatureCard(feature: _features[index]),
           ),
         ],
       ),

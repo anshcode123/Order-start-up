@@ -9,6 +9,8 @@ import 'package:scanserve/shared/widgets/app_button.dart';
 import 'package:scanserve/shared/widgets/app_logo.dart';
 
 /// Top navigation bar for the marketing landing page.
+/// On mobile the nav links collapse and only the logo + login button show,
+/// since the full nav doesn't fit a narrow viewport.
 class LandingHeader extends StatelessWidget {
   const LandingHeader({super.key});
 
@@ -27,9 +29,13 @@ class LandingHeader extends StatelessWidget {
           const AppLogo(),
           const Spacer(),
           if (isDesktop) ...[
-            const _NavLink(label: AppStrings.navHowItWorks),
+            _NavLink(label: AppStrings.navHowItWorks),
             const SizedBox(width: 32),
-            const _NavLink(label: AppStrings.navFeatures),
+            _NavLink(label: AppStrings.navFeatures),
+            const SizedBox(width: 32),
+            _NavLink(label: AppStrings.navPricing),
+            const SizedBox(width: 32),
+            _NavLink(label: AppStrings.navFaq),
             const SizedBox(width: 40),
           ],
           AppOutlinedButton(
@@ -49,12 +55,9 @@ class _NavLink extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: AppTextStyles.bodySmall.copyWith(
-        color: AppColors.textPrimary,
-        fontWeight: FontWeight.w500,
-      ),
-    );
+    return Text(label, style: AppTextStyles.bodySmall.copyWith(
+      color: AppColors.textPrimary,
+      fontWeight: FontWeight.w500,
+    ));
   }
 }

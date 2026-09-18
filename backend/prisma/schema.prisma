@@ -1,0 +1,112 @@
+// ScanServe database schema - PostgreSQL via Prisma.
+// Replaces the Phase 3 Mongoose models (models/User.js, models/Restaurant.js),
+// which have been removed.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  RESTAURANT_ADMIN
+}
+
+model Restaurant {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String   @default("")
+  phone       String   @default("")
+  email       String   @default("")
+  address     String   @default("")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  admins     User[]
+  categories Category[]
+  menuItems  MenuItem[]
+
+  @@map("restaurants")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Only set for RESTAURANT_ADMIN; null for SUPER_ADMIN. Prisma/Postgres
+  // can't express "required only when role = X" declaratively the way
+  // the old Mongoose pre-validate hook did - that invariant is now
+  // enforced in application code (see services/restaurantService.js and
+  // scripts/seedSuperAdmin.js, the only two places that create a User).
+  restaurantId String?     @map("restaurant_id")
+  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id])
+
+  @@map("users")
+}
+
+// --- Phase 4: Restaurant menu management ---
+
+model Category {
+  id           String   @id @default(uuid())
+  restaurantId String   @map("restaurant_id")
+  // NOTE: this Cascade is dormant in practice - restaurants are never
+  // hard-deleted by the app (soft ACTIVE/INACTIVE only, per Phase 3).
+  // If that ever changes, deleting a Restaurant with menu items could
+  // race against MenuItem's Restrict-on-Category constraint below,
+  // depending on Postgres's cascade ordering. Revisit before adding any
+  // real "delete restaurant" endpoint.
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  name         String
+  description  String   @default("")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  menuItems MenuItem[]
+
+  // Same category name is fine across different restaurants, but not
+  // twice within the same restaurant (Phase 4 spec #2).
+  @@unique([restaurantId, name])
+  @@index([restaurantId])
+  @@map("categories")
+}
+
+model MenuItem {
+  id           String   @id @default(uuid())
+  restaurantId String     @map("restaurant_id")
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  categoryId   String     @map("category_id")
+  // Restrict (not Cascade): a category with menu items can't be deleted
+  // at the DB level either - defense in depth alongside the application-
+  // level check in controllers/categoryController.js.
+  category     Category   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  name         String
+  description  String   @default("")
+  // Money as Decimal, never Float - avoids binary floating-point
+  // rounding errors on prices (Phase 4 spec #10).
+  price        Decimal  @db.Decimal(10, 2)
+  imageUrl     String?  @map("image_url")
+  isAvailable  Boolean  @default(true) @map("is_available")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // NOTE for the future Orders phase: don't make an order line depend
+  // solely on this row via a required/cascading FK. Snapshot the name
+  // and price onto the order line at order time, and if a MenuItem FK
+  // is kept for reference, make it nullable with onDelete: SetNull so
+  // deleting an item later never deletes or corrupts order history.
+  @@index([restaurantId])
+  @@index([categoryId])
+  @@map("menu_items")
+}

@@ -1,119 +1,165 @@
-# ScanServe — Phase 1
+# ScanServe — through Phase 4 (PostgreSQL/Prisma)
 
-Digital QR Menu + Table Ordering System. This is Phase 1 only: project
-scaffolding, landing page, login UI (no auth logic), and a health-check
-backend. See "Not implemented yet" below for what's intentionally left out.
+Digital QR Menu + Table Ordering System. Implemented so far:
+Phase 1 (scaffolding + landing page), Phase 2 (auth foundation),
+Phase 3 (Super Admin restaurant management), and Phase 4 (Restaurant
+Admin menu management: categories, menu items, prices, images,
+availability) - all on PostgreSQL + Prisma. See "Not implemented yet"
+for what's intentionally left out.
 
 ## A note on how this was built
 
-This container has Node.js but **no Flutter SDK and no internet access**,
-so I wrote the Flutter source files by hand instead of running
-`flutter create` / `flutter pub get`, and I couldn't run `npm install` to
-fetch backend packages either. The backend JS was syntax-checked with
-`node --check` and is straightforward Express, but neither side has been
-run end-to-end here. The first-run steps below matter more than usual —
-follow them in order.
+This container has Node.js but **no Flutter SDK, no PostgreSQL, no
+Cloudinary account, and no internet access**. That means:
+- Every backend `.js` file was syntax-checked with `node --check`
+  (28 files, all pass), cross-referenced against `prisma/schema.prisma`,
+  but `npm install`, `prisma generate`, and `prisma migrate dev` could
+  not actually be run here (confirmed: `npm install` gets a 403 from
+  the registry in this sandbox).
+- Nothing has been run against a real PostgreSQL instance, and no
+  image has actually been uploaded to Cloudinary.
+- Flutter/Dart source was hand-written; every new file's imports were
+  cross-checked against files that exist, and brace/paren balance was
+  checked programmatically, but nothing was compiled with `flutter
+  analyze` or run.
+
+Run the commands under "Backend: setup & run" locally, in order.
 
 ## Project structure
 
 ```
 scanserve/
-├── backend/            Node.js + Express API
-│   ├── config/db.js         MongoDB connection
-│   ├── controllers/         (empty - Phase 2+)
-│   ├── middleware/          errorHandler.js, notFound.js
-│   ├── models/               (empty - Phase 2+)
-│   ├── routes/health.js     GET /api/health
-│   ├── services/             (empty - Phase 2+)
-│   ├── utils/                 (empty - Phase 2+)
+├── backend/
+│   ├── prisma/schema.prisma  Restaurant, User, Category, MenuItem models
+│   ├── lib/prisma.js         shared PrismaClient instance
+│   ├── controllers/          auth, restaurant (super admin), restaurantSelf
+│   │                         (Phase 4: dashboard+QR), dashboard, category,
+│   │                         menuItem
+│   ├── middleware/           auth.js, restaurantAccess.js, upload.js (Phase 4),
+│   │                         errorHandler.js, notFound.js
+│   ├── routes/               auth, admin, restaurants, categories (Phase 4),
+│   │                         menuItems (Phase 4), restaurantSelf (Phase 4), health
+│   ├── services/             restaurantService, qrService, cloudinaryService (Phase 4)
+│   ├── scripts/               seedSuperAdmin.js
 │   └── server.js
 │
-└── frontend/           Flutter Web app
-    └── lib/
-        ├── core/            theme, router, constants, network, utils
-        ├── features/
-        │   ├── landing/     marketing page ("/")
-        │   ├── auth/        login screen UI ("/login")
-        │   ├── super_admin/       (empty - Phase 2+)
-        │   ├── restaurant_admin/  (empty - Phase 2+)
-        │   └── customer_menu/     (empty - Phase 2+)
-        ├── shared/          reusable widgets/models
-        └── main.dart
+└── frontend/lib/
+    ├── core/                  theme, router (+ auth guard), constants, network, utils
+    ├── features/
+    │   ├── landing/           marketing page ("/")
+    │   ├── auth/              login ("/login")
+    │   ├── restaurant_admin/  dashboard, categories, menu, menu item form,
+    │   │                      QR, settings - all under "/dashboard/*" (Phase 4)
+    │   ├── super_admin/       dashboard, restaurants list/create/detail/QR
+    │   └── customer_menu/     (empty - later phase)
+    ├── shared/                widgets, data models (Category, MenuItem added)
+    └── main.dart
 ```
 
 ## Backend: setup & run
 
+Requires PostgreSQL and a Cloudinary account (free tier is fine).
+
 ```bash
 cd scanserve/backend
 cp .env.example .env
-# edit .env and set MONGODB_URI (a local mongod or a MongoDB Atlas URI both work)
+# set DATABASE_URL, JWT_SECRET, FRONTEND_URL, and the three CLOUDINARY_* vars
+
 npm install
-npm run dev        # or: npm start
+npx prisma generate
+npx prisma migrate dev --name add_menu_management   # adds categories/menu_items tables;
+                                                       # does NOT touch existing users/restaurants data
+
+npm run dev
+
+# If you don't already have one from Phase 3:
+SUPER_ADMIN_NAME="Jane Doe" SUPER_ADMIN_EMAIL="jane@scanserve.com" \
+SUPER_ADMIN_PASSWORD="a-strong-password" npm run seed:super-admin
 ```
-
-Verify:
-
-```bash
-curl http://localhost:5000/api/health
-# {"success":true,"message":"ScanServe API is running"}
-```
-
-The server refuses to start if MongoDB isn't reachable — that's
-intentional per the spec (Express only starts after the DB connects).
 
 ## Frontend: setup & run
 
-Because this environment has no Flutter SDK, the `web/`, `android/`,
-`ios/`, etc. platform folders that `flutter create` normally generates
-(icons, launch config, `.metadata`) are **not** present — only
-`web/index.html` and `web/manifest.json`, written by hand. Regenerate the
-rest before running:
-
 ```bash
 cd scanserve/frontend
-flutter create --platforms=web .    # fills in missing platform files; keeps lib/ and pubspec.yaml
-flutter pub get
-flutter run -d chrome                # or: flutter build web
+flutter create --platforms=web .   # only needed once, if not already done
+flutter pub get                    # picks up image_picker, added this round
+flutter run -d chrome
 ```
 
-If `flutter create` overwrites `web/index.html` or `web/manifest.json`,
-diff them against what's here — the app title/theme-color/manifest name
-were set to ScanServe branding.
+## Testing the Phase 4 flow
 
-Verify:
-- Landing page loads at `/` with header, hero, how-it-works, features,
-  pricing, and FAQ sections.
-- "Restaurant Login" navigates to `/login` and shows the login card
-  (email/password fields, disabled "Log in" button — no auth wired up
-  yet, by design).
-- Resize the window (or use device toolbar) to confirm the layout
-  adapts across desktop, tablet, and mobile widths.
+1. Log in as a Restaurant Admin (create one via Super Admin → Create
+   Restaurant if you don't have one) → `/dashboard` now shows real
+   Categories/Menu Items/Available/Unavailable counts.
+2. `/dashboard/categories` → Add Category ("Starters") → appears in the
+   list with an item count of 0.
+3. Try adding "Starters" again → rejected (duplicate name within your
+   restaurant).
+4. `/dashboard/menu` → Add Menu Item → pick "Starters", set a price,
+   optionally pick an image → saves and shows up grouped under
+   "Starters" on the Menu screen.
+5. Edit the item, change its category, price, and toggle availability
+   from the card's Disable/Enable button - watch the dashboard counts
+   update accordingly.
+6. Try deleting "Starters" while it still has that item → rejected with
+   "Cannot delete category because menu items are assigned to it."
+   Delete the item first, then the category succeeds.
+7. Isolation check: log in as a *different* Restaurant Admin (a second
+   restaurant) and confirm `GET /api/restaurant/categories` and
+   `/api/restaurant/menu-items` only ever return their own restaurant's
+   data - there's no way to pass another restaurant's id in, since the
+   backend never reads restaurantId from the request.
+8. `/dashboard/qr` shows this restaurant's own QR (no id in the URL -
+   self-service, scoped to req.user.restaurantId).
 
 ## Environment variables (backend/.env)
 
 ```
 PORT=5000
-MONGODB_URI=
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/scanserve?schema=public
 JWT_SECRET=
+JWT_EXPIRES_IN=7d
+FRONTEND_URL=http://localhost:3000
+SUPER_ADMIN_NAME=
+SUPER_ADMIN_EMAIL=
+SUPER_ADMIN_PASSWORD=
+
+# Phase 4 - image uploads
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
 ```
 
 Never commit a real `.env` — only `.env.example` is tracked.
 
+## API response format (Phase 4 endpoints)
+
+New in this phase: `/api/restaurant/categories`, `/api/restaurant/menu-items`,
+`/api/restaurant/dashboard`, and `/api/restaurant/qr` all respond as
+`{ success, message, data }` (or `{ success, message }` on error), per
+the Phase 4 spec. Phase 3's existing endpoints (`/api/admin/*`,
+`/api/auth/*`) were intentionally left in their original shape -
+retrofitting a working, already-integrated API wasn't asked for and
+risked breaking the Super Admin screens for no benefit.
+
 ## Not implemented yet (by design — later phases)
 
-- User / Restaurant / Category / Menu / Order models
-- Authentication (login button is intentionally disabled)
-- Super Admin / Restaurant Admin functionality
-- WhatsApp Business Cloud API
-- Socket.IO
-- QR code generation
-- Customer cart & ordering
+- Customer-facing menu page, cart, table numbers
+- Orders, order statuses, Socket.IO, WhatsApp, payments
+- Customer accounts/login
+- Restaurant Admin password change / restaurant profile editing
+  (Settings page is a minimal placeholder for now)
+- Permanent restaurant/category/menu-item hard-delete beyond what's
+  specified (categories with items can't be deleted; menu items delete
+  freely since orders don't exist yet to reference them)
 
 ## Known gaps from the environment constraints
 
-- Neither `npm install` nor `flutter pub get` has actually been run —
-  do this locally before anything else.
-- Flutter web platform files (icons, `.metadata`, etc.) need
-  `flutter create --platforms=web .` to be generated, as noted above.
-- MongoDB itself isn't running anywhere here — point `MONGODB_URI` at
-  your own local or Atlas instance.
+- `npm install`, `prisma generate`, `prisma migrate dev`, and
+  `flutter pub get` have not actually been run here.
+- No image has been uploaded to Cloudinary; the upload path was
+  written against Cloudinary's documented API but not exercised.
+- Nothing has been run against a real PostgreSQL instance.
+- Flutter/Dart code was hand-written and cross-checked (imports, widget
+  constructor signatures, brace balance) but never compiled - run
+  `flutter analyze` after `pub get` and fix anything it flags.

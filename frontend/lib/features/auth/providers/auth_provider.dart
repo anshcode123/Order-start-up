@@ -1,110 +1,64 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scanserve/core/network/dio_client.dart';
-import 'package:scanserve/features/auth/models/user_model.dart';
-import 'package:scanserve/features/auth/services/auth_service.dart';
+import 'package:scanserve/features/auth/state/auth_state.dart';
+import 'package:scanserve/shared/models/app_user.dart';
 
-class AuthState {
-  final UserModel? user;
-  final String? token;
-  final bool isLoading;
-  final bool isInitialized;
-  final String? errorMessage;
-
-  const AuthState({
-    this.user,
-    this.token,
-    this.isLoading = false,
-    this.isInitialized = false,
-    this.errorMessage,
-  });
-
-  bool get isAuthenticated =>
-      user != null && token != null && token!.isNotEmpty;
-
-  AuthState copyWith({
-    UserModel? user,
-    String? token,
-    bool? isLoading,
-    bool? isInitialized,
-    String? errorMessage,
-    bool clearUser = false,
-    bool clearError = false,
-  }) {
-    return AuthState(
-      user: clearUser ? null : (user ?? this.user),
-      token: clearUser ? null : (token ?? this.token),
-      isLoading: isLoading ?? this.isLoading,
-      isInitialized: isInitialized ?? this.isInitialized,
-      errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
-    );
-  }
-}
-
-final authServiceProvider = Provider<AuthService>((ref) {
-  final dio = ref.watch(dioProvider);
-  return AuthService(dio);
+final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
+  return AuthNotifier(ref);
 });
 
 class AuthNotifier extends StateNotifier<AuthState> {
-  final AuthService _authService;
-
-  AuthNotifier(this._authService) : super(const AuthState()) {
-    _initSession();
+  AuthNotifier(this._ref) : super(const AuthState()) {
+    _bootstrap();
   }
 
-  Future<void> _initSession() async {
+  final Ref _ref;
+
+  Dio get _dio => _ref.read(dioProvider);
+
+  /// Runs once on app start: if a token is already stored, validate it
+  /// against GET /api/auth/me. An expired/invalid token just results in
+  /// "unauthenticated" - the router sends the user to /login.
+  Future<void> _bootstrap() async {
+    final token = _ref.read(tokenStorageProvider).token;
+    if (token == null) {
+      state = state.copyWith(status: AuthStatus.unauthenticated);
+      return;
+    }
+
     try {
-      final session = await _authService.getStoredSession();
-      if (session != null) {
-        state = state.copyWith(
-          user: session.user,
-          token: session.token,
-          isInitialized: true,
-        );
-      } else {
-        state = state.copyWith(isInitialized: true);
-      }
-    } catch (_) {
-      state = state.copyWith(isInitialized: true);
+      final response = await _dio.get('/auth/me');
+      final user = AppUser.fromMeJson(response.data['user'] as Map<String, dynamic>);
+      state = AuthState(status: AuthStatus.authenticated, user: user);
+    } on DioException {
+      await _ref.read(tokenStorageProvider).clear();
+      state = state.copyWith(status: AuthStatus.unauthenticated);
     }
   }
 
-  Future<bool> login(String email, String password) async {
-    state = state.copyWith(isLoading: true, clearError: true);
+  /// Throws a DioException on failure - screens should catch this and
+  /// show apiErrorMessage(error) to the user.
+  Future<void> login({required String email, required String password}) async {
+    final response = await _dio.post('/auth/login', data: {
+      'email': email,
+      'password': password,
+    });
 
-    try {
-      final result = await _authService.login(email, password);
-      state = state.copyWith(
-        user: result.user,
-        token: result.token,
-        isLoading: false,
-        clearError: true,
-      );
-      return true;
-    } catch (e) {
-      final msg = e.toString().replaceAll('Exception: ', '');
-      state = state.copyWith(
-        isLoading: false,
-        errorMessage: msg,
-      );
-      return false;
-    }
+    final token = response.data['token'] as String;
+    await _ref.read(tokenStorageProvider).setToken(token);
+
+    // The login response's user shape is slimmer than /me's - fetch the
+    // full profile (with restaurant name) right away so the dashboard
+    // has everything it needs without a second round trip on first paint.
+    final meResponse = await _dio.get('/auth/me');
+    final user = AppUser.fromMeJson(meResponse.data['user'] as Map<String, dynamic>);
+
+    state = AuthState(status: AuthStatus.authenticated, user: user);
   }
 
   Future<void> logout() async {
-    state = state.copyWith(isLoading: true);
-    await _authService.logout();
-    state = const AuthState(isInitialized: true);
-  }
-
-  void clearError() {
-    if (state.errorMessage != null) {
-      state = state.copyWith(clearError: true);
-    }
+    await _ref.read(tokenStorageProvider).clear();
+    state = const AuthState(status: AuthStatus.unauthenticated);
   }
 }
-
-final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  final authService = ref.watch(authServiceProvider);
-  return AuthNotifier(authService);
-});

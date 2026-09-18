@@ -1,95 +1,77 @@
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const bcrypt = require('bcrypt');
+const prisma = require('../lib/prisma');
+const { signToken } = require('../utils/token');
 
-function generateToken(user) {
-  return jwt.sign(
-    {
-      id: user._id,
-      role: user.role,
-      restaurant: user.restaurant,
-    },
-    process.env.JWT_SECRET || 'scanserve_jwt_secret_key_2026_super_secure',
-    { expiresIn: '30d' }
-  );
-}
-
-/**
- * @desc    Auth user & get token
- * @route   POST /api/auth/login
- * @access  Public
- */
+// POST /api/auth/login
 async function login(req, res, next) {
   try {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide both email and password',
-      });
+      return res.status(400).json({ success: false, message: 'Email and password are required' });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+    const user = await prisma.user.findUnique({ where: { email: String(email).toLowerCase() } });
 
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials',
-      });
+    // Same generic message whether the email doesn't exist or the
+    // password is wrong, so login can't be used to enumerate accounts.
+    if (!user || !user.isActive) {
+      return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
-    const isMatch = await user.matchPassword(password);
-    if (!isMatch) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials',
-      });
+    const passwordMatches = await bcrypt.compare(password, user.password);
+    if (!passwordMatches) {
+      return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
-    const token = generateToken(user);
+    const token = signToken({ id: user.id, role: user.role, restaurant: user.restaurantId });
 
     res.status(200).json({
       success: true,
-      message: 'Login successful',
       token,
       user: {
-        id: user._id,
+        id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
-        restaurant: user.restaurant,
+        restaurant: user.restaurantId,
       },
     });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    next(err);
   }
 }
 
-/**
- * @desc    Get current logged in user profile
- * @route   GET /api/auth/me
- * @access  Private
- */
-async function getMe(req, res, next) {
+// GET /api/auth/me
+// Returns the logged-in user's profile. For a RESTAURANT_ADMIN this also
+// includes their restaurant's name - this is what both dashboards read
+// from, so there's no separate "restaurant admin dashboard" endpoint.
+async function me(req, res, next) {
   try {
-    const user = await User.findById(req.user.id);
-    res.status(200).json({
-      success: true,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        restaurant: user.restaurant,
-      },
-    });
-  } catch (error) {
-    next(error);
+    const responseUser = {
+      id: req.user.id,
+      name: req.user.name,
+      email: req.user.email,
+      role: req.user.role,
+      restaurant: null,
+    };
+
+    if (req.user.role === 'RESTAURANT_ADMIN' && req.user.restaurant) {
+      const restaurant = await prisma.restaurant.findUnique({ where: { id: req.user.restaurant } });
+      if (restaurant) {
+        responseUser.restaurant = {
+          id: restaurant.id,
+          name: restaurant.name,
+          slug: restaurant.slug,
+          isActive: restaurant.isActive,
+        };
+      }
+    }
+
+    res.status(200).json({ success: true, user: responseUser });
+  } catch (err) {
+    next(err);
   }
 }
 
-module.exports = {
-  login,
-  getMe,
-};
-
+module.exports = { login, me };

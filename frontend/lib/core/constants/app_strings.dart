@@ -14,6 +14,8 @@ class AppStrings {
   // Landing - nav
   static const String navHowItWorks = 'How It Works';
   static const String navFeatures = 'Features';
+  static const String navPricing = 'Pricing';
+  static const String navFaq = 'FAQ';
   static const String restaurantLogin = 'Restaurant Login';
   static const String viewDemo = 'View Demo';
 

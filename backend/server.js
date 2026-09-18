@@ -4,8 +4,14 @@ const express = require('express');
 const cors = require('cors');
 
 const connectDB = require('./config/db');
+const prisma = require('./lib/prisma');
 const healthRoutes = require('./routes/health');
-const authRoutes = require('./routes/authRoutes');
+const authRoutes = require('./routes/auth');
+const adminRoutes = require('./routes/admin');
+const restaurantRoutes = require('./routes/restaurants');
+const categoryRoutes = require('./routes/categories');
+const menuItemRoutes = require('./routes/menuItems');
+const restaurantSelfRoutes = require('./routes/restaurantSelf');
 const notFound = require('./middleware/notFound');
 const errorHandler = require('./middleware/errorHandler');
 
@@ -22,6 +28,11 @@ function createApp() {
   // Routes
   app.use('/api/health', healthRoutes);
   app.use('/api/auth', authRoutes);
+  app.use('/api/admin', adminRoutes);
+  app.use('/api/restaurants', restaurantRoutes);
+  app.use('/api/restaurant/categories', categoryRoutes);
+  app.use('/api/restaurant/menu-items', menuItemRoutes);
+  app.use('/api/restaurant', restaurantSelfRoutes); // /dashboard, /qr (Phase 4)
 
   // 404 + error handling (must be last)
   app.use(notFound);
@@ -32,7 +43,7 @@ function createApp() {
 
 async function start() {
   try {
-    // Connect to MongoDB BEFORE starting the HTTP server.
+    // Connect to PostgreSQL (via Prisma) BEFORE starting the HTTP server.
     await connectDB();
 
     const app = createApp();
@@ -45,5 +56,13 @@ async function start() {
     process.exit(1);
   }
 }
+
+async function shutdown() {
+  await prisma.$disconnect();
+  process.exit(0);
+}
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 start();

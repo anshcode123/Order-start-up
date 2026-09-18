@@ -8,28 +8,17 @@ class AppPrimaryButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.expand = false,
-    this.isLoading = false,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final bool expand;
-  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
     final button = ElevatedButton(
-      onPressed: isLoading ? null : onPressed,
-      child: isLoading
-          ? const SizedBox(
-              height: 20,
-              width: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
-              ),
-            )
-          : Text(label),
+      onPressed: onPressed,
+      child: Text(label),
     );
 
     if (expand) {

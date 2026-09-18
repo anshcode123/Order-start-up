@@ -12,12 +12,9 @@ class _Step {
 }
 
 const _steps = [
-  _Step('1', 'Place your QR',
-      'Print a unique QR code for each table and set it out.'),
-  _Step('2', 'Customer scans',
-      'The menu opens instantly in their browser - no app to install.'),
-  _Step('3', 'Order & serve',
-      'Orders land with your staff in real time, ready to prepare.'),
+  _Step('1', 'Place your QR', 'Print a unique QR code for each table and set it out.'),
+  _Step('2', 'Customer scans', 'The menu opens instantly in their browser - no app to install.'),
+  _Step('3', 'Order & serve', 'Orders land with your staff in real time, ready to prepare.'),
 ];
 
 class HowItWorksSection extends StatelessWidget {
@@ -31,7 +28,7 @@ class HowItWorksSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Text('How It Works', style: AppTextStyles.displayMedium),
+          Text('How It Works', style: AppTextStyles.displayMedium),
           const SizedBox(height: 40),
           Flex(
             direction: isMobile ? Axis.vertical : Axis.horizontal,

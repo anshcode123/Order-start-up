@@ -1,76 +1,54 @@
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const { verifyToken } = require('../utils/token');
+const prisma = require('../lib/prisma');
 
 /**
- * Protect routes - verifies JWT from Authorization header
+ * Verifies the Bearer token and attaches the authenticated user to
+ * req.user. Loads the user fresh from the DB (rather than trusting the
+ * token payload alone) so a deactivated/deleted user is rejected even
+ * with a still-valid token.
+ *
+ * req.user ends up with: id, name, email, role, restaurant, isActive
+ * (restaurant is the restaurant id string, or null - not populated here).
+ * NOTE: Prisma's column is `restaurantId` - it's normalized to
+ * `restaurant` here so every downstream consumer (restaurantAccess.js,
+ * controllers, etc.) keeps working unchanged after the Mongo -> Postgres
+ * migration.
  */
 async function protect(req, res, next) {
-  let token;
-
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer')
-  ) {
-    token = req.headers.authorization.split(' ')[1];
-  }
-
-  if (!token) {
-    return res.status(401).json({
-      success: false,
-      message: 'Not authorized to access this route, token missing',
-    });
-  }
-
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'scanserve_jwt_secret_key_2026_super_secure');
+    const header = req.headers.authorization || '';
+    const [scheme, token] = header.split(' ');
 
-    const user = await User.findById(decoded.id).select('-password');
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Not authorized, user not found',
-      });
+    if (scheme !== 'Bearer' || !token) {
+      return res.status(401).json({ success: false, message: 'Not authenticated' });
     }
 
-    req.user = user;
+    const payload = verifyToken(token);
+
+    const user = await prisma.user.findUnique({ where: { id: payload.id } });
+
+    if (!user || !user.isActive) {
+      return res.status(401).json({ success: false, message: 'Not authenticated' });
+    }
+
+    req.user = { ...user, restaurant: user.restaurantId };
     next();
   } catch (err) {
-    return res.status(401).json({
-      success: false,
-      message: 'Not authorized, invalid or expired token',
-    });
+    return res.status(401).json({ success: false, message: 'Not authenticated' });
   }
 }
 
 /**
- * Role middleware - SUPER_ADMIN only
+ * Restricts a route to one or more roles. Use AFTER protect().
+ *   router.get('/x', protect, authorize('SUPER_ADMIN'), handler)
  */
-function requireSuperAdmin(req, res, next) {
-  if (req.user && req.user.role === 'SUPER_ADMIN') {
-    return next();
-  }
-  return res.status(403).json({
-    success: false,
-    message: 'Access denied: Super Admin role required',
-  });
+function authorize(...roles) {
+  return (req, res, next) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: 'Forbidden' });
+    }
+    next();
+  };
 }
 
-/**
- * Role middleware - RESTAURANT_ADMIN only
- */
-function requireRestaurantAdmin(req, res, next) {
-  if (req.user && req.user.role === 'RESTAURANT_ADMIN') {
-    return next();
-  }
-  return res.status(403).json({
-    success: false,
-    message: 'Access denied: Restaurant Admin role required',
-  });
-}
-
-module.exports = {
-  protect,
-  requireSuperAdmin,
-  requireRestaurantAdmin,
-};
-
+module.exports = { protect, authorize };
