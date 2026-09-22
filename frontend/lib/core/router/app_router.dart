@@ -5,10 +5,16 @@ import 'package:scanserve/core/constants/app_routes.dart';
 import 'package:scanserve/features/auth/providers/auth_provider.dart';
 import 'package:scanserve/features/auth/screens/login_screen.dart';
 import 'package:scanserve/features/auth/state/auth_state.dart';
+import 'package:scanserve/features/customer_menu/screens/cart_screen.dart';
+import 'package:scanserve/features/customer_menu/screens/order_review_screen.dart';
+import 'package:scanserve/features/customer_menu/screens/order_success_screen.dart';
+import 'package:scanserve/features/customer_menu/screens/public_menu_screen.dart';
 import 'package:scanserve/features/landing/screens/landing_screen.dart';
 import 'package:scanserve/features/restaurant_admin/screens/categories_screen.dart';
 import 'package:scanserve/features/restaurant_admin/screens/menu_item_form_screen.dart';
 import 'package:scanserve/features/restaurant_admin/screens/menu_screen.dart';
+import 'package:scanserve/features/restaurant_admin/screens/order_detail_screen.dart';
+import 'package:scanserve/features/restaurant_admin/screens/orders_screen.dart';
 import 'package:scanserve/features/restaurant_admin/screens/restaurant_admin_dashboard_screen.dart';
 import 'package:scanserve/features/restaurant_admin/screens/restaurant_admin_qr_screen.dart';
 import 'package:scanserve/features/restaurant_admin/screens/settings_screen.dart';
@@ -20,21 +26,31 @@ import 'package:scanserve/features/super_admin/screens/restaurants_list_screen.d
 import 'package:scanserve/features/super_admin/screens/super_admin_dashboard_screen.dart';
 import 'package:scanserve/features/super_admin/widgets/super_admin_scaffold.dart';
 
-/// Route table + auth guard.
-///
-/// NOTE ON THE PATTERN: this Provider watches authProvider, so the
-/// whole GoRouter is rebuilt whenever auth status changes (login,
-/// logout, or the initial bootstrap resolving). That's a deliberate
-/// simplification instead of wiring up a Listenable bridge - it only
-/// fires on actual auth transitions, not on ordinary in-app navigation,
-/// and it's fine for those to reset to initialLocation since the
-/// redirect below immediately sends the user to the right home anyway.
+/// Notifies GoRouter when authState changes without disposing/re-creating the GoRouter instance.
+class RouterNotifier extends ChangeNotifier {
+  final Ref _ref;
+
+  RouterNotifier(this._ref) {
+    _ref.listen<AuthState>(
+      authProvider,
+      (_, __) => notifyListeners(),
+    );
+  }
+}
+
+final routerNotifierProvider = Provider<RouterNotifier>((ref) {
+  return RouterNotifier(ref);
+});
+
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authProvider);
+  final notifier = ref.watch(routerNotifierProvider);
 
   return GoRouter(
-    initialLocation: AppRoutes.landing,
-    redirect: (context, state) => _redirect(authState, state.matchedLocation),
+    refreshListenable: notifier,
+    redirect: (context, state) {
+      final authState = ref.read(authProvider);
+      return _redirect(authState, state.matchedLocation);
+    },
     routes: [
       GoRoute(
         path: AppRoutes.landing,
@@ -46,13 +62,53 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'login',
         builder: (context, state) => const LoginScreen(),
       ),
+      // Customer-facing (Phase 5 & 6) - deliberately outside both admin
+      // ShellRoutes: no admin nav chrome, and _redirect below never
+      // treats these as protected, so they work with no auth at all.
+      GoRoute(
+        path: AppRoutes.customerMenuTemplate,
+        name: 'customer-menu',
+        builder: (context, state) => PublicMenuScreen(
+          restaurantSlug: state.pathParameters['restaurantSlug']!,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.cart,
+        name: 'cart',
+        builder: (context, state) => const CartScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.orderReview,
+        name: 'order-review',
+        builder: (context, state) => const OrderReviewScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.orderSuccessTemplate,
+        name: 'order-success',
+        builder: (context, state) => OrderSuccessScreen(
+          orderRef: state.pathParameters['orderRef']!,
+        ),
+      ),
       ShellRoute(
-        builder: (context, state, child) => RestaurantAdminScaffold(child: child),
+        builder: (context, state, child) =>
+            RestaurantAdminScaffold(child: child),
         routes: [
           GoRoute(
             path: AppRoutes.dashboard,
             name: 'dashboard',
             builder: (context, state) => const RestaurantAdminDashboardScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.dashboardOrders,
+            name: 'dashboard-orders',
+            builder: (context, state) => const OrdersScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.dashboardOrderDetailTemplate,
+            name: 'dashboard-order-detail',
+            builder: (context, state) => OrderDetailScreen(
+              orderId: state.pathParameters['id']!,
+            ),
           ),
           GoRoute(
             path: AppRoutes.dashboardCategories,
@@ -72,8 +128,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.dashboardMenuItemEditTemplate,
             name: 'dashboard-menu-item-edit',
-            builder: (context, state) =>
-                MenuItemFormScreen(menuItemId: state.pathParameters['id']!),
+            builder: (context, state) => MenuItemFormScreen(
+              menuItemId: state.pathParameters['id']!,
+            ),
           ),
           GoRoute(
             path: AppRoutes.dashboardQr,
@@ -108,14 +165,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.superAdminRestaurantDetailTemplate,
             name: 'super-admin-restaurant-detail',
-            builder: (context, state) =>
-                RestaurantDetailScreen(restaurantId: state.pathParameters['id']!),
+            builder: (context, state) => RestaurantDetailScreen(
+              restaurantId: state.pathParameters['id']!,
+            ),
           ),
           GoRoute(
             path: AppRoutes.superAdminRestaurantQrTemplate,
             name: 'super-admin-restaurant-qr',
-            builder: (context, state) =>
-                RestaurantQrScreen(restaurantId: state.pathParameters['id']!),
+            builder: (context, state) => RestaurantQrScreen(
+              restaurantId: state.pathParameters['id']!,
+            ),
           ),
         ],
       ),
@@ -137,7 +196,8 @@ String? _redirect(AuthState authState, String location) {
   }
 
   final user = authState.user!;
-  final homeForRole = user.isSuperAdmin ? AppRoutes.superAdminDashboard : AppRoutes.dashboard;
+  final homeForRole =
+      user.isSuperAdmin ? AppRoutes.superAdminDashboard : AppRoutes.dashboard;
 
   final goingToPublicOnlyRoute =
       location == AppRoutes.login || location == AppRoutes.landing;

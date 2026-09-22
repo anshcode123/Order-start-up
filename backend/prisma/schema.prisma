@@ -16,6 +16,17 @@ enum Role {
   RESTAURANT_ADMIN
 }
 
+// --- Phase 6: Ordering ---
+enum OrderStatus {
+  PENDING
+  ACCEPTED
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+  REJECTED
+}
+
 model Restaurant {
   id          String   @id @default(uuid())
   name        String
@@ -31,6 +42,7 @@ model Restaurant {
   admins     User[]
   categories Category[]
   menuItems  MenuItem[]
+  orders     Order[]
 
   @@map("restaurants")
 }
@@ -101,12 +113,63 @@ model MenuItem {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  // NOTE for the future Orders phase: don't make an order line depend
-  // solely on this row via a required/cascading FK. Snapshot the name
-  // and price onto the order line at order time, and if a MenuItem FK
-  // is kept for reference, make it nullable with onDelete: SetNull so
-  // deleting an item later never deletes or corrupts order history.
+  // Phase 6: an order line snapshots itemName/unitPrice/subtotal at the
+  // time of order, and this FK is nullable with onDelete: SetNull (see
+  // OrderItem below) - deleting a menu item later never deletes or
+  // corrupts historical orders. This is the "future Orders phase" this
+  // note used to warn about.
+  orderItems OrderItem[]
+
   @@index([restaurantId])
   @@index([categoryId])
   @@map("menu_items")
+}
+
+// --- Phase 6: Ordering ---
+// Customers are anonymous - the only customer-provided identifier is
+// tableNumber (a String; "A12", "12B", "VIP-1" must all be valid, so it
+// is never an Int). publicToken is a separate, securely-random
+// identifier used for the customer-facing status lookup
+// (GET /api/public/orders/:orderRef/status) - the internal `id` (a
+// sequential-feeling UUID is still technically unguessable, but
+// publicToken exists so this route's security doesn't depend on that
+// assumption) is never exposed to the public endpoints.
+model Order {
+  id           String      @id @default(uuid())
+  restaurantId String      @map("restaurant_id")
+  restaurant   Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  tableNumber  String      @map("table_number")
+  status       OrderStatus @default(PENDING)
+  totalAmount  Decimal     @db.Decimal(10, 2) @map("total_amount")
+  publicToken  String      @unique @map("public_token")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  items OrderItem[]
+
+  @@index([restaurantId])
+  @@index([restaurantId, status])
+  @@map("orders")
+}
+
+// Snapshots itemName/unitPrice/subtotal at order time - an order must
+// keep showing what the customer actually paid even if the restaurant
+// later edits or deletes that MenuItem (Phase 6 spec: "IMPORTANT ORDER
+// ITEM SNAPSHOT"). menuItemId is only a best-effort reference back to
+// the still-existing item, if any - never the source of truth.
+model OrderItem {
+  id         String    @id @default(uuid())
+  orderId    String    @map("order_id")
+  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId String?   @map("menu_item_id")
+  menuItem   MenuItem? @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+  itemName   String    @map("item_name")
+  unitPrice  Decimal   @db.Decimal(10, 2) @map("unit_price")
+  quantity   Int
+  subtotal   Decimal   @db.Decimal(10, 2)
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([orderId])
+  @@index([menuItemId])
+  @@map("order_items")
 }

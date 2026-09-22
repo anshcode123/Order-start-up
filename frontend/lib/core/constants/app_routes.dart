@@ -28,6 +28,19 @@ class AppRoutes {
   static const String superAdminRestaurantDetailTemplate = '/super-admin/restaurants/:id';
   static const String superAdminRestaurantQrTemplate = '/super-admin/restaurants/:id/qr';
 
-  // Added in a later phase - do not implement yet:
-  // static const String customerMenu = '/menu/:slug';
+  // Customer-facing (Phase 5) - public, no auth
+  static String customerMenu(String restaurantSlug) => '/menu/$restaurantSlug';
+  static const String customerMenuTemplate = '/menu/:restaurantSlug';
+  static const String cart = '/cart';
+  static const String orderReview = '/order/review';
+
+  // Customer-facing (Phase 6) - public, no auth. A distinct "success/"
+  // segment keeps this from ever pattern-colliding with /order/review.
+  static String orderSuccess(String orderRef) => '/order/success/$orderRef';
+  static const String orderSuccessTemplate = '/order/success/:orderRef';
+
+  // Restaurant Admin (Phase 6)
+  static const String dashboardOrders = '/dashboard/orders';
+  static String dashboardOrderDetail(String id) => '/dashboard/orders/$id';
+  static const String dashboardOrderDetailTemplate = '/dashboard/orders/:id';
 }

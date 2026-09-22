@@ -2,15 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:scanserve/core/constants/app_routes.dart';
+import 'package:scanserve/core/network/socket_connection_status.dart';
 import 'package:scanserve/core/theme/app_colors.dart';
 import 'package:scanserve/core/theme/app_text_styles.dart';
 import 'package:scanserve/core/utils/responsive.dart';
 import 'package:scanserve/features/auth/providers/auth_provider.dart';
+import 'package:scanserve/features/restaurant_admin/providers/order_providers.dart';
+import 'package:scanserve/features/restaurant_admin/providers/restaurant_order_socket_provider.dart';
 import 'package:scanserve/shared/widgets/app_logo.dart';
 
-/// Nav shown on every Restaurant Admin page: Dashboard, Menu,
-/// Categories, QR, Settings, Logout (Phase 4 spec #18). Orders and
-/// WhatsApp are intentionally not here yet - later phases.
+/// Nav shown on every Restaurant Admin page: Dashboard, Orders, Menu,
+/// Categories, QR, Settings, Logout. WhatsApp is intentionally not here
+/// yet - a later phase.
+///
+/// Also where the Phase 7 order socket lives for the whole "/dashboard/*"
+/// session: watching restaurantOrderSocketProvider here (rather than
+/// only on the Orders screen) means the connection - and the "New order
+/// received" notification - stays live even while the admin is on the
+/// Menu or Settings tab, not just when Orders happens to be open
+/// (Phase 7 spec #21).
 class RestaurantAdminScaffold extends ConsumerWidget {
   const RestaurantAdminScaffold({super.key, required this.child});
 
@@ -18,6 +28,7 @@ class RestaurantAdminScaffold extends ConsumerWidget {
 
   static const _navItems = [
     (label: 'Dashboard', icon: Icons.dashboard_outlined, route: AppRoutes.dashboard),
+    (label: 'Orders', icon: Icons.receipt_long_outlined, route: AppRoutes.dashboardOrders),
     (label: 'Menu', icon: Icons.restaurant_menu_outlined, route: AppRoutes.dashboardMenu),
     (label: 'Categories', icon: Icons.category_outlined, route: AppRoutes.dashboardCategories),
     (label: 'QR', icon: Icons.qr_code_2_rounded, route: AppRoutes.dashboardQr),
@@ -28,13 +39,31 @@ class RestaurantAdminScaffold extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isDesktop = Responsive.isDesktop(context);
     final currentLocation = GoRouterState.of(context).matchedLocation;
+    final connectionStatus = ref.watch(restaurantOrderSocketProvider);
+
+    // In-app "New order received" notification (Phase 7 spec #21) -
+    // fires from anywhere in the admin shell, not just the Orders tab.
+    ref.listen(newOrderEventProvider, (previous, next) {
+      if (next == null) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('New order received — Table ${next.tableNumber}'),
+          backgroundColor: AppColors.primary,
+          action: SnackBarAction(
+            label: 'View',
+            textColor: Colors.white,
+            onPressed: () => context.go(AppRoutes.dashboardOrders),
+          ),
+        ),
+      );
+    });
 
     if (isDesktop) {
       return Scaffold(
         backgroundColor: AppColors.background,
         body: Row(
           children: [
-            _SideNav(currentLocation: currentLocation),
+            _SideNav(currentLocation: currentLocation, connectionStatus: connectionStatus),
             Expanded(child: child),
           ],
         ),
@@ -46,17 +75,26 @@ class RestaurantAdminScaffold extends ConsumerWidget {
       appBar: AppBar(
         title: const AppLogo(fontSize: 18),
         backgroundColor: AppColors.surface,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Center(child: _ConnectionDot(status: connectionStatus)),
+          ),
+        ],
       ),
-      drawer: Drawer(child: _SideNav(currentLocation: currentLocation, isDrawer: true)),
+      drawer: Drawer(
+        child: _SideNav(currentLocation: currentLocation, connectionStatus: connectionStatus, isDrawer: true),
+      ),
       body: child,
     );
   }
 }
 
 class _SideNav extends ConsumerWidget {
-  const _SideNav({required this.currentLocation, this.isDrawer = false});
+  const _SideNav({required this.currentLocation, required this.connectionStatus, this.isDrawer = false});
 
   final String currentLocation;
+  final SocketConnectionStatus connectionStatus;
   final bool isDrawer;
 
   bool _isSelected(String route) {
@@ -76,9 +114,15 @@ class _SideNav extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (!isDrawer) ...[
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              child: AppLogo(fontSize: 18),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  const AppLogo(fontSize: 18),
+                  const Spacer(),
+                  _ConnectionDot(status: connectionStatus),
+                ],
+              ),
             ),
             const SizedBox(height: 28),
           ],
@@ -100,6 +144,41 @@ class _SideNav extends ConsumerWidget {
             selected: false,
             onTap: () => ref.read(authProvider.notifier).logout(),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Small live/offline indicator - deliberately subtle (a dot, not a
+/// banner) since a brief disconnect/reconnect is expected and normal
+/// (Phase 7 spec #14), not something that should alarm the admin.
+class _ConnectionDot extends StatelessWidget {
+  const _ConnectionDot({required this.status});
+
+  final SocketConnectionStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final (color, label) = switch (status) {
+      SocketConnectionStatus.connected => (AppColors.success, 'Live'),
+      SocketConnectionStatus.connecting => (AppColors.textMuted, 'Connecting'),
+      SocketConnectionStatus.disconnected => (AppColors.textMuted, 'Reconnecting'),
+      SocketConnectionStatus.error => (AppColors.error, 'Offline'),
+    };
+
+    return Tooltip(
+      message: '$label order updates',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(label, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 11)),
         ],
       ),
     );
