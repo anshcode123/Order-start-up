@@ -18,10 +18,12 @@ class RestaurantCreateScreen extends ConsumerStatefulWidget {
   const RestaurantCreateScreen({super.key});
 
   @override
-  ConsumerState<RestaurantCreateScreen> createState() => _RestaurantCreateScreenState();
+  ConsumerState<RestaurantCreateScreen> createState() =>
+      _RestaurantCreateScreenState();
 }
 
-class _RestaurantCreateScreenState extends ConsumerState<RestaurantCreateScreen> {
+class _RestaurantCreateScreenState
+    extends ConsumerState<RestaurantCreateScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _nameController = TextEditingController();
@@ -80,7 +82,8 @@ class _RestaurantCreateScreenState extends ConsumerState<RestaurantCreateScreen>
       ref.invalidate(superAdminDashboardProvider);
 
       setState(() {
-        _created = CreatedRestaurantResult.fromJson(response.data as Map<String, dynamic>);
+        _created = CreatedRestaurantResult.fromJson(
+            response.data as Map<String, dynamic>);
       });
     } catch (error) {
       setState(() => _errorMessage = apiErrorMessage(error));
@@ -113,13 +116,15 @@ class _RestaurantCreateScreenState extends ConsumerState<RestaurantCreateScreen>
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.error.withOpacity(0.08),
+                      color: AppColors.error.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                      border: Border.all(
+                          color: AppColors.error.withValues(alpha: 0.3)),
                     ),
                     child: Text(
                       _errorMessage!,
-                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.error),
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.error),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -129,10 +134,18 @@ class _RestaurantCreateScreenState extends ConsumerState<RestaurantCreateScreen>
                 _LabeledField(
                   label: 'Restaurant Name *',
                   controller: _nameController,
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Restaurant name is required' : null,
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'Restaurant name is required'
+                      : null,
                 ),
-                _LabeledField(label: 'Description', controller: _descriptionController, maxLines: 3),
-                _LabeledField(label: 'Phone', controller: _phoneController, keyboardType: TextInputType.phone),
+                _LabeledField(
+                    label: 'Description',
+                    controller: _descriptionController,
+                    maxLines: 3),
+                _LabeledField(
+                    label: 'Phone',
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone),
                 _LabeledField(
                   label: 'Email',
                   controller: _emailController,
@@ -142,21 +155,27 @@ class _RestaurantCreateScreenState extends ConsumerState<RestaurantCreateScreen>
                     return v.contains('@') ? null : 'Enter a valid email';
                   },
                 ),
-                _LabeledField(label: 'Address', controller: _addressController, maxLines: 2),
+                _LabeledField(
+                    label: 'Address',
+                    controller: _addressController,
+                    maxLines: 2),
                 const SizedBox(height: 24),
                 _SectionHeading('RESTAURANT ADMIN'),
                 const SizedBox(height: 16),
                 _LabeledField(
                   label: 'Admin Name *',
                   controller: _adminNameController,
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Admin name is required' : null,
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'Admin name is required'
+                      : null,
                 ),
                 _LabeledField(
                   label: 'Admin Email *',
                   controller: _adminEmailController,
                   keyboardType: TextInputType.emailAddress,
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Admin email is required';
+                    if (v == null || v.trim().isEmpty)
+                      return 'Admin email is required';
                     return v.contains('@') ? null : 'Enter a valid email';
                   },
                 ),
@@ -165,8 +184,10 @@ class _RestaurantCreateScreenState extends ConsumerState<RestaurantCreateScreen>
                   controller: _adminPasswordController,
                   obscureText: true,
                   validator: (v) {
-                    if (v == null || v.isEmpty) return 'Admin password is required';
-                    if (v.length < 8) return 'Password must be at least 8 characters';
+                    if (v == null || v.isEmpty)
+                      return 'Admin password is required';
+                    if (v.length < 8)
+                      return 'Password must be at least 8 characters';
                     return null;
                   },
                 ),
@@ -210,9 +231,11 @@ class _CreateSuccessView extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 40),
+                  const Icon(Icons.check_circle_rounded,
+                      color: AppColors.success, size: 40),
                   const SizedBox(height: 16),
-                  Text('Restaurant Created Successfully', style: AppTextStyles.headline),
+                  Text('Restaurant Created Successfully',
+                      style: AppTextStyles.headline),
                   const SizedBox(height: 24),
                   _Row('Restaurant', result.restaurantName),
                   _Row('Admin', result.adminEmail),
@@ -224,8 +247,9 @@ class _CreateSuccessView extends StatelessWidget {
                         child: AppOutlinedButton(
                           label: 'View QR',
                           expand: true,
-                          onPressed: () =>
-                              context.go(AppRoutes.superAdminRestaurantQr(result.restaurantId)),
+                          onPressed: () => context.go(
+                              AppRoutes.superAdminRestaurantQr(
+                                  result.restaurantId)),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -233,7 +257,8 @@ class _CreateSuccessView extends StatelessWidget {
                         child: AppPrimaryButton(
                           label: 'Done',
                           expand: true,
-                          onPressed: () => context.go(AppRoutes.superAdminRestaurants),
+                          onPressed: () =>
+                              context.go(AppRoutes.superAdminRestaurants),
                         ),
                       ),
                     ],
@@ -260,8 +285,12 @@ class _Row extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-          Text(value, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary)),
+          Text(label,
+              style:
+                  AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+          Text(value,
+              style: AppTextStyles.bodySmall
+                  .copyWith(color: AppColors.textPrimary)),
         ],
       ),
     );
@@ -309,10 +338,11 @@ class _LabeledField extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: AppTextStyles.bodySmall.copyWith(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w500,
-          )),
+          Text(label,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w500,
+              )),
           const SizedBox(height: 6),
           TextFormField(
             controller: controller,

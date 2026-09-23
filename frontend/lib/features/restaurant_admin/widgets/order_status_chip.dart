@@ -8,7 +8,8 @@ Color _colorForStatus(String status) {
       return AppColors.primary;
     case 'ACCEPTED':
     case 'PREPARING':
-      return const Color(0xFF3D7EDB); // informational blue - no existing token for this
+      return const Color(
+          0xFF3D7EDB); // informational blue - no existing token for this
     case 'READY':
       return AppColors.success;
     case 'COMPLETED':
@@ -32,12 +33,13 @@ class OrderStatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         status,
-        style: AppTextStyles.bodySmall.copyWith(color: color, fontWeight: FontWeight.w700, fontSize: 12),
+        style: AppTextStyles.bodySmall
+            .copyWith(color: color, fontWeight: FontWeight.w700, fontSize: 12),
       ),
     );
   }

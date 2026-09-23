@@ -1,10 +1,10 @@
 name: scanserve
 description: "ScanServe - Digital QR Menu + Table Ordering System"
-publish_to: 'none'
+publish_to: "none"
 version: 0.1.0
 
 environment:
-  sdk: '>=3.3.0 <4.0.0'
+  sdk: ">=3.3.0 <4.0.0"
 
 dependencies:
   flutter:
@@ -15,12 +15,17 @@ dependencies:
 
   # Routing
   go_router: ^14.2.0
+  flutter_web_plugins:
+    sdk: flutter
 
   # Networking
   dio: ^5.5.0
 
   # Persists the JWT across page reloads (uses localStorage on web)
   shared_preferences: ^2.2.3
+
+  # Web platform APIs (replaces deprecated dart:html)
+  web: ^1.0.0
 
   # Menu item image picking (Phase 4) - works on Flutter Web via the
   # browser's file picker under the hood

@@ -49,7 +49,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     refreshListenable: notifier,
     redirect: (context, state) {
       final authState = ref.read(authProvider);
-      return _redirect(authState, state.matchedLocation);
+
+      return _redirect(
+        authState,
+        state.matchedLocation,
+      );
     },
     routes: [
       GoRoute(
@@ -68,9 +72,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.customerMenuTemplate,
         name: 'customer-menu',
-        builder: (context, state) => PublicMenuScreen(
-          restaurantSlug: state.pathParameters['restaurantSlug']!,
-        ),
+        builder: (context, state) {
+          final slug = state.pathParameters['restaurantSlug']!;
+          return PublicMenuScreen(restaurantSlug: slug);
+        },
       ),
       GoRoute(
         path: AppRoutes.cart,

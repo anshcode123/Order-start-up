@@ -67,7 +67,8 @@ class _MenuItemFormScreenState extends ConsumerState<MenuItemFormScreen> {
   }
 
   Future<void> _pickImage() async {
-    final file = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
+    final file = await ImagePicker()
+        .pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (file == null) return;
     final bytes = await file.readAsBytes();
     setState(() {
@@ -90,7 +91,8 @@ class _MenuItemFormScreenState extends ConsumerState<MenuItemFormScreen> {
 
     // If this throws, the caller aborts the whole save - the existing
     // image (and the rest of the item) is never touched.
-    final response = await dio.post('/restaurant/menu-items/upload-image', data: formData);
+    final response =
+        await dio.post('/restaurant/menu-items/upload-image', data: formData);
     return response.data['data']['url'] as String;
   }
 
@@ -120,17 +122,20 @@ class _MenuItemFormScreenState extends ConsumerState<MenuItemFormScreen> {
       };
 
       if (widget.isEditing) {
-        await dio.put('/restaurant/menu-items/${widget.menuItemId}', data: payload);
+        await dio.put('/restaurant/menu-items/${widget.menuItemId}',
+            data: payload);
       } else {
         await dio.post('/restaurant/menu-items', data: payload);
       }
 
       ref.invalidate(menuItemsProvider);
       ref.invalidate(restaurantAdminStatsProvider);
-      if (widget.isEditing) ref.invalidate(menuItemProvider(widget.menuItemId!));
+      if (widget.isEditing)
+        ref.invalidate(menuItemProvider(widget.menuItemId!));
 
       if (mounted) {
-        showSuccessSnackBar(context, widget.isEditing ? 'Menu item updated' : 'Menu item added');
+        showSuccessSnackBar(context,
+            widget.isEditing ? 'Menu item updated' : 'Menu item added');
         context.go(AppRoutes.dashboardMenu);
       }
     } catch (error) {
@@ -180,25 +185,31 @@ class _MenuItemFormScreenState extends ConsumerState<MenuItemFormScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(widget.isEditing ? 'Edit Menu Item' : 'Add Menu Item', style: AppTextStyles.displayMedium),
+          Text(widget.isEditing ? 'Edit Menu Item' : 'Add Menu Item',
+              style: AppTextStyles.displayMedium),
           const SizedBox(height: 24),
           if (_errorMessage != null) ...[
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.error.withOpacity(0.08),
+                color: AppColors.error.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                border:
+                    Border.all(color: AppColors.error.withValues(alpha: 0.3)),
               ),
-              child: Text(_errorMessage!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
+              child: Text(_errorMessage!,
+                  style:
+                      AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
             ),
             const SizedBox(height: 20),
           ],
           _label('Food Name *'),
           TextFormField(
             controller: _nameController,
-            validator: (v) => (v == null || v.trim().isEmpty) ? 'Food name is required' : null,
+            validator: (v) => (v == null || v.trim().isEmpty)
+                ? 'Food name is required'
+                : null,
           ),
           const SizedBox(height: 16),
           _label('Description'),
@@ -206,11 +217,13 @@ class _MenuItemFormScreenState extends ConsumerState<MenuItemFormScreen> {
           const SizedBox(height: 16),
           _label('Category *'),
           DropdownButtonFormField<String>(
-            value: categories.any((c) => c.id == _categoryId) ? _categoryId : null,
+            initialValue:
+                categories.any((c) => c.id == _categoryId) ? _categoryId : null,
             hint: const Text('Select a category'),
             items: [
               for (final category in categories)
-                DropdownMenuItem(value: category.id, child: Text(category.name)),
+                DropdownMenuItem(
+                    value: category.id, child: Text(category.name)),
             ],
             onChanged: (value) => setState(() => _categoryId = value),
           ),
@@ -219,7 +232,8 @@ class _MenuItemFormScreenState extends ConsumerState<MenuItemFormScreen> {
               padding: const EdgeInsets.only(top: 6),
               child: Text(
                 'Create a category first before adding menu items.',
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+                style: AppTextStyles.bodySmall
+                    .copyWith(color: AppColors.textMuted),
               ),
             ),
           const SizedBox(height: 16),
@@ -241,13 +255,18 @@ class _MenuItemFormScreenState extends ConsumerState<MenuItemFormScreen> {
           const SizedBox(height: 16),
           Row(
             children: [
-              Switch(value: _isAvailable, onChanged: (v) => setState(() => _isAvailable = v)),
-              Text(_isAvailable ? 'Available' : 'Unavailable', style: AppTextStyles.bodySmall),
+              Switch(
+                  value: _isAvailable,
+                  onChanged: (v) => setState(() => _isAvailable = v)),
+              Text(_isAvailable ? 'Available' : 'Unavailable',
+                  style: AppTextStyles.bodySmall),
             ],
           ),
           const SizedBox(height: 28),
           AppPrimaryButton(
-            label: _isSubmitting ? 'Saving...' : (widget.isEditing ? 'Save Changes' : 'Add Item'),
+            label: _isSubmitting
+                ? 'Saving...'
+                : (widget.isEditing ? 'Save Changes' : 'Add Item'),
             expand: true,
             onPressed: _isSubmitting ? null : _submit,
           ),
@@ -259,30 +278,35 @@ class _MenuItemFormScreenState extends ConsumerState<MenuItemFormScreen> {
 
   Widget _buildImagePicker() {
     final preview = _pickedImageBytes != null
-        ? Image.memory(_pickedImageBytes!, width: 96, height: 96, fit: BoxFit.cover)
+        ? Image.memory(_pickedImageBytes!,
+            width: 96, height: 96, fit: BoxFit.cover)
         : (_existingImageUrl != null
-            ? Image.network(_existingImageUrl!, width: 96, height: 96, fit: BoxFit.cover)
+            ? Image.network(_existingImageUrl!,
+                width: 96, height: 96, fit: BoxFit.cover)
             : Container(
                 width: 96,
                 height: 96,
                 color: AppColors.primaryLight,
-                child: const Icon(Icons.image_outlined, color: AppColors.primaryDark),
+                child: const Icon(Icons.image_outlined,
+                    color: AppColors.primaryDark),
               ));
 
     return Row(
       children: [
         ClipRRect(borderRadius: BorderRadius.circular(8), child: preview),
         const SizedBox(width: 16),
-        OutlinedButton(onPressed: _pickImage, child: const Text('Choose Image')),
+        OutlinedButton(
+            onPressed: _pickImage, child: const Text('Choose Image')),
       ],
     );
   }
 
   Widget _label(String text) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
-        child: Text(text, style: AppTextStyles.bodySmall.copyWith(
-          color: AppColors.textPrimary,
-          fontWeight: FontWeight.w500,
-        )),
+        child: Text(text,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w500,
+            )),
       );
 }

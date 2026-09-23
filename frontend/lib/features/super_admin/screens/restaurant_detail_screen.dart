@@ -24,10 +24,12 @@ class RestaurantDetailScreen extends ConsumerStatefulWidget {
   final String restaurantId;
 
   @override
-  ConsumerState<RestaurantDetailScreen> createState() => _RestaurantDetailScreenState();
+  ConsumerState<RestaurantDetailScreen> createState() =>
+      _RestaurantDetailScreenState();
 }
 
-class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen> {
+class _RestaurantDetailScreenState
+    extends ConsumerState<RestaurantDetailScreen> {
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -97,7 +99,9 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
       });
       ref.invalidate(restaurantDetailProvider(widget.restaurantId));
       ref.invalidate(restaurantsListProvider);
-      if (mounted) showSuccessSnackBar(context, activating ? 'Restaurant enabled' : 'Restaurant disabled');
+      if (mounted)
+        showSuccessSnackBar(
+            context, activating ? 'Restaurant enabled' : 'Restaurant disabled');
     } catch (error) {
       if (mounted) showErrorSnackBar(context, apiErrorMessage(error));
     }
@@ -105,7 +109,8 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
 
   @override
   Widget build(BuildContext context) {
-    final detailAsync = ref.watch(restaurantDetailProvider(widget.restaurantId));
+    final detailAsync =
+        ref.watch(restaurantDetailProvider(widget.restaurantId));
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -129,12 +134,16 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
                 children: [
                   Row(
                     children: [
-                      Expanded(child: Text(detail.restaurant.name, style: AppTextStyles.displayMedium)),
+                      Expanded(
+                          child: Text(detail.restaurant.name,
+                              style: AppTextStyles.displayMedium)),
                       StatusBadge(isActive: detail.restaurant.isActive),
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Text('/${detail.restaurant.slug}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                  Text('/${detail.restaurant.slug}',
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.textMuted)),
                   const SizedBox(height: 24),
                   _InfoCard(
                     title: 'Restaurant Admin',
@@ -146,20 +155,25 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
                   const SizedBox(height: 16),
                   _InfoCard(
                     title: 'Menu URL',
-                    children: [
-                      Text(detail.menuUrl, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary)),
-                    ],
                     trailing: TextButton(
-                      onPressed: () => context.go(AppRoutes.superAdminRestaurantQr(widget.restaurantId)),
+                      onPressed: () => context.go(
+                          AppRoutes.superAdminRestaurantQr(
+                              widget.restaurantId)),
                       child: const Text('View QR'),
                     ),
+                    children: [
+                      Text(detail.menuUrl,
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.textPrimary)),
+                    ],
                   ),
                   const SizedBox(height: 24),
-                  Text('EDIT DETAILS', style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textMuted,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.6,
-                  )),
+                  Text('EDIT DETAILS',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textMuted,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.6,
+                      )),
                   const SizedBox(height: 16),
                   _Field('Restaurant Name', _nameController),
                   _Field('Description', _descriptionController, maxLines: 3),
@@ -179,7 +193,8 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
                       const SizedBox(width: 12),
                       Expanded(
                         child: AppOutlinedButton(
-                          label: detail.restaurant.isActive ? 'Disable' : 'Enable',
+                          label:
+                              detail.restaurant.isActive ? 'Disable' : 'Enable',
                           expand: true,
                           onPressed: () => _toggleStatus(detail.restaurant),
                         ),
@@ -217,7 +232,9 @@ class _InfoCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: Text(title, style: AppTextStyles.title.copyWith(fontSize: 15))),
+              Expanded(
+                  child: Text(title,
+                      style: AppTextStyles.title.copyWith(fontSize: 15))),
               if (trailing != null) trailing!,
             ],
           ),
@@ -240,8 +257,15 @@ class _Row extends StatelessWidget {
       padding: const EdgeInsets.only(top: 4),
       child: Row(
         children: [
-          SizedBox(width: 70, child: Text(label, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted))),
-          Expanded(child: Text(value, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary))),
+          SizedBox(
+              width: 70,
+              child: Text(label,
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: AppColors.textMuted))),
+          Expanded(
+              child: Text(value,
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: AppColors.textPrimary))),
         ],
       ),
     );
@@ -261,7 +285,9 @@ class _Field extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
+          Text(label,
+              style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
           const SizedBox(height: 6),
           TextFormField(controller: controller, maxLines: maxLines),
         ],

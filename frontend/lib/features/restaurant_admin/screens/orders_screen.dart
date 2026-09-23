@@ -35,7 +35,8 @@ const _tabs = [
   (label: 'Cancelled', statuses: ['CANCELLED', 'REJECTED']),
 ];
 
-class _OrdersScreenState extends ConsumerState<OrdersScreen> with SingleTickerProviderStateMixin {
+class _OrdersScreenState extends ConsumerState<OrdersScreen>
+    with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
   @override
@@ -71,10 +72,12 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> with SingleTickerPr
             ),
           ),
           ordersAsync.when(
-            loading: () => const Expanded(child: Center(child: CircularProgressIndicator())),
+            loading: () => const Expanded(
+                child: Center(child: CircularProgressIndicator())),
             error: (error, _) => Expanded(
               child: Center(
-                child: Text(apiErrorMessage(error), style: AppTextStyles.body.copyWith(color: AppColors.error)),
+                child: Text(apiErrorMessage(error),
+                    style: AppTextStyles.body.copyWith(color: AppColors.error)),
               ),
             ),
             data: (orders) => Expanded(child: _buildTabs(context, orders)),
@@ -95,7 +98,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> with SingleTickerPr
           indicatorColor: AppColors.primary,
           tabs: [
             for (final tab in _tabs)
-              Tab(text: '${tab.label} (${orders.where((o) => tab.statuses.contains(o.status)).length})'),
+              Tab(
+                  text:
+                      '${tab.label} (${orders.where((o) => tab.statuses.contains(o.status)).length})'),
           ],
         ),
         Expanded(
@@ -104,7 +109,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> with SingleTickerPr
             children: [
               for (final tab in _tabs)
                 _OrderList(
-                  orders: orders.where((o) => tab.statuses.contains(o.status)).toList(),
+                  orders: orders
+                      .where((o) => tab.statuses.contains(o.status))
+                      .toList(),
                   emptyLabel: 'No ${tab.label.toLowerCase()} orders.',
                 ),
             ],
@@ -132,7 +139,9 @@ class _OrderList extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 80),
               child: Center(
-                child: Text(emptyLabel, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                child: Text(emptyLabel,
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: AppColors.textMuted)),
               ),
             ),
           ],
@@ -168,16 +177,21 @@ class _OrderCard extends ConsumerWidget {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isNew ? AppColors.primaryLight.withOpacity(0.4) : AppColors.surface,
+          color: isNew
+              ? AppColors.primaryLight.withValues(alpha: 0.4)
+              : AppColors.surface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isNew ? AppColors.primary : AppColors.border, width: isNew ? 1.5 : 1),
+          border: Border.all(
+              color: isNew ? AppColors.primary : AppColors.border,
+              width: isNew ? 1.5 : 1),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Text('Order #${order.id.substring(0, 8).toUpperCase()}', style: AppTextStyles.title.copyWith(fontSize: 15)),
+                Text('Order #${order.id.substring(0, 8).toUpperCase()}',
+                    style: AppTextStyles.title.copyWith(fontSize: 15)),
                 const Spacer(),
                 OrderStatusChip(status: order.status),
               ],
@@ -185,7 +199,8 @@ class _OrderCard extends ConsumerWidget {
             const SizedBox(height: 4),
             Text(
               'Table ${order.tableNumber} · ${order.totalQuantity} item(s)',
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+              style:
+                  AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
             ),
             const SizedBox(height: 10),
             for (final item in order.items)
@@ -196,21 +211,26 @@ class _OrderCard extends ConsumerWidget {
                     Expanded(
                       child: Text(
                         '${item.quantity} × ${item.itemName}',
-                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary),
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.textPrimary),
                       ),
                     ),
-                    Text(item.subtotal, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary)),
+                    Text(item.subtotal,
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.textPrimary)),
                   ],
                 ),
               ),
             const Divider(height: 20, color: AppColors.border),
             Row(
               children: [
-                Text('Total', style: AppTextStyles.title.copyWith(fontSize: 14)),
+                Text('Total',
+                    style: AppTextStyles.title.copyWith(fontSize: 14)),
                 const Spacer(),
                 Text(
                   order.total,
-                  style: AppTextStyles.title.copyWith(color: AppColors.primaryDark, fontSize: 14),
+                  style: AppTextStyles.title
+                      .copyWith(color: AppColors.primaryDark, fontSize: 14),
                 ),
               ],
             ),

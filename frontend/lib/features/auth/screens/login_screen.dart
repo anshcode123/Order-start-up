@@ -87,13 +87,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   children: [
                     const Center(child: AppLogo(fontSize: 24)),
                     const SizedBox(height: 32),
-                    Text(
+                    const Text(
                       AppStrings.welcomeBack,
                       style: AppTextStyles.headline,
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
-                    Text(
+                    const Text(
                       AppStrings.loginSubtitle,
                       style: AppTextStyles.bodySmall,
                       textAlign: TextAlign.center,
@@ -103,18 +103,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppColors.error.withOpacity(0.08),
+                          color: AppColors.error.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                          border: Border.all(
+                              color: AppColors.error.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.error_outline, color: AppColors.error, size: 18),
+                            const Icon(Icons.error_outline,
+                                color: AppColors.error, size: 18),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 _errorMessage!,
-                                style: AppTextStyles.bodySmall.copyWith(color: AppColors.error),
+                                style: AppTextStyles.bodySmall
+                                    .copyWith(color: AppColors.error),
                               ),
                             ),
                           ],
@@ -122,10 +125,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                       const SizedBox(height: 20),
                     ],
-                    Text(AppStrings.email, style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w500,
-                    )),
+                    Text(AppStrings.email,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w500,
+                        )),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _emailController,
@@ -143,10 +147,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       },
                     ),
                     const SizedBox(height: 20),
-                    Text(AppStrings.password, style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w500,
-                    )),
+                    Text(AppStrings.password,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w500,
+                        )),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _passwordController,
@@ -162,12 +167,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 : Icons.visibility_off_outlined,
                           ),
                           onPressed: () {
-                            setState(() => _obscurePassword = !_obscurePassword);
+                            setState(
+                                () => _obscurePassword = !_obscurePassword);
                           },
                         ),
                       ),
                       validator: (value) {
-                        if (value == null || value.isEmpty) return 'Password is required';
+                        if (value == null || value.isEmpty)
+                          return 'Password is required';
                         return null;
                       },
                     ),
@@ -180,7 +187,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const SizedBox(height: 24),
                     Text(
                       AppStrings.loginFooter,
-                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.textMuted),
                       textAlign: TextAlign.center,
                     ),
                   ],

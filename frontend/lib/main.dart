@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:scanserve/core/network/dio_client.dart';
 import 'package:scanserve/core/network/token_storage.dart';
@@ -8,6 +8,7 @@ import 'package:scanserve/core/router/app_router.dart';
 import 'package:scanserve/core/theme/app_theme.dart';
 
 Future<void> main() async {
+  usePathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
 
   // SharedPreferences loads asynchronously, but providers are built
@@ -40,4 +41,3 @@ class ScanServeApp extends ConsumerWidget {
     );
   }
 }
-

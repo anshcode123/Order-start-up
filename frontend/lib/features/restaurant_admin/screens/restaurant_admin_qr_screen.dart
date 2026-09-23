@@ -1,8 +1,5 @@
 import 'dart:convert';
-// This app is Flutter Web only for now - see the equivalent note in
-// features/super_admin/screens/restaurant_qr_screen.dart.
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
+import 'package:web/web.dart' as web;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,9 +16,12 @@ class RestaurantAdminQrScreen extends ConsumerWidget {
   const RestaurantAdminQrScreen({super.key});
 
   void _downloadQr(String dataUrl, String restaurantName) {
-    final fileName = '${restaurantName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}-qr.png';
-    final anchor = html.AnchorElement(href: dataUrl)..download = fileName;
-    html.document.body?.append(anchor);
+    final fileName =
+        '${restaurantName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}-qr.png';
+    final anchor = web.HTMLAnchorElement()
+      ..href = dataUrl
+      ..download = fileName;
+    web.document.body?.append(anchor);
     anchor.click();
     anchor.remove();
   }
@@ -64,7 +64,9 @@ class RestaurantAdminQrScreen extends ConsumerWidget {
                   ),
                   child: Column(
                     children: [
-                      Text(qr.restaurantName, style: AppTextStyles.headline, textAlign: TextAlign.center),
+                      Text(qr.restaurantName,
+                          style: AppTextStyles.headline,
+                          textAlign: TextAlign.center),
                       const SizedBox(height: 24),
                       Container(
                         padding: const EdgeInsets.all(16),
@@ -75,12 +77,15 @@ class RestaurantAdminQrScreen extends ConsumerWidget {
                         child: Image.memory(bytes, width: 240, height: 240),
                       ),
                       const SizedBox(height: 20),
-                      Text('Menu URL', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                      Text('Menu URL',
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.textMuted)),
                       const SizedBox(height: 4),
                       SelectableText(
                         qr.menuUrl,
                         textAlign: TextAlign.center,
-                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary),
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.textPrimary),
                       ),
                       const SizedBox(height: 24),
                       Row(
@@ -89,7 +94,8 @@ class RestaurantAdminQrScreen extends ConsumerWidget {
                             child: AppOutlinedButton(
                               label: 'Copy Menu URL',
                               expand: true,
-                              onPressed: () => _copyMenuUrl(context, qr.menuUrl),
+                              onPressed: () =>
+                                  _copyMenuUrl(context, qr.menuUrl),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -97,7 +103,8 @@ class RestaurantAdminQrScreen extends ConsumerWidget {
                             child: AppPrimaryButton(
                               label: 'Download QR',
                               expand: true,
-                              onPressed: () => _downloadQr(qr.qrDataUrl, qr.restaurantName),
+                              onPressed: () =>
+                                  _downloadQr(qr.qrDataUrl, qr.restaurantName),
                             ),
                           ),
                         ],

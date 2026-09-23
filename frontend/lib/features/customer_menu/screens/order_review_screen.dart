@@ -35,7 +35,9 @@ class OrderReviewScreen extends ConsumerWidget {
           padding: EdgeInsets.all(Responsive.pagePadding(context)),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 480),
-            child: tableNumber == null ? const _TableNumberForm() : const _OrderReviewView(),
+            child: tableNumber == null
+                ? const _TableNumberForm()
+                : const _OrderReviewView(),
           ),
         ),
       ),
@@ -80,10 +82,11 @@ class _TableNumberFormState extends ConsumerState<_TableNumberForm> {
             style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
           ),
           const SizedBox(height: 24),
-          Text('Table Number *', style: AppTextStyles.bodySmall.copyWith(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w500,
-          )),
+          Text('Table Number *',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w500,
+              )),
           const SizedBox(height: 8),
           TextFormField(
             controller: _controller,
@@ -102,7 +105,8 @@ class _TableNumberFormState extends ConsumerState<_TableNumberForm> {
             },
           ),
           const SizedBox(height: 16),
-          AppPrimaryButton(label: 'Continue', expand: true, onPressed: _continue),
+          AppPrimaryButton(
+              label: 'Continue', expand: true, onPressed: _continue),
         ],
       ),
     );
@@ -122,7 +126,8 @@ class _OrderReviewViewState extends ConsumerState<_OrderReviewView> {
     if (!mounted) return;
 
     final result = ref.read(orderSubmissionProvider);
-    if (result.status == OrderSubmissionStatus.success && result.order != null) {
+    if (result.status == OrderSubmissionStatus.success &&
+        result.order != null) {
       context.pushReplacement(AppRoutes.orderSuccess(result.order!.orderId));
     }
     // On failure, state.errorMessage is shown inline below - the cart
@@ -140,7 +145,8 @@ class _OrderReviewViewState extends ConsumerState<_OrderReviewView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (cart.restaurantName != null) Text(cart.restaurantName!, style: AppTextStyles.displayMedium),
+        if (cart.restaurantName != null)
+          Text(cart.restaurantName!, style: AppTextStyles.displayMedium),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -150,9 +156,11 @@ class _OrderReviewViewState extends ConsumerState<_OrderReviewView> {
           ),
           child: Row(
             children: [
-              const Icon(Icons.table_bar_outlined, size: 18, color: AppColors.primaryDark),
+              const Icon(Icons.table_bar_outlined,
+                  size: 18, color: AppColors.primaryDark),
               const SizedBox(width: 8),
-              Text('Table $tableNumber', style: AppTextStyles.title.copyWith(fontSize: 15)),
+              Text('Table $tableNumber',
+                  style: AppTextStyles.title.copyWith(fontSize: 15)),
               const Spacer(),
               TextButton(
                 onPressed: isSubmitting
@@ -170,7 +178,9 @@ class _OrderReviewViewState extends ConsumerState<_OrderReviewView> {
           children: [
             Text('Subtotal', style: AppTextStyles.title),
             const Spacer(),
-            Text(cart.subtotalDisplay, style: AppTextStyles.title.copyWith(color: AppColors.primaryDark)),
+            Text(cart.subtotalDisplay,
+                style:
+                    AppTextStyles.title.copyWith(color: AppColors.primaryDark)),
           ],
         ),
         if (submission.status == OrderSubmissionStatus.failure) ...[
@@ -179,12 +189,13 @@ class _OrderReviewViewState extends ConsumerState<_OrderReviewView> {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppColors.error.withOpacity(0.08),
+              color: AppColors.error.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.error.withOpacity(0.3)),
+              border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
             ),
             child: Text(
-              submission.errorMessage ?? apiErrorMessage(Exception('Unknown error')),
+              submission.errorMessage ??
+                  apiErrorMessage(Exception('Unknown error')),
               style: AppTextStyles.bodySmall.copyWith(color: AppColors.error),
             ),
           ),
@@ -215,9 +226,12 @@ class _ReviewLine extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text('${item.name} × ${item.quantity}', style: AppTextStyles.body.copyWith(color: AppColors.textPrimary)),
+            child: Text('${item.name} × ${item.quantity}',
+                style:
+                    AppTextStyles.body.copyWith(color: AppColors.textPrimary)),
           ),
-          Text(item.subtotalDisplay, style: AppTextStyles.body.copyWith(color: AppColors.textPrimary)),
+          Text(item.subtotalDisplay,
+              style: AppTextStyles.body.copyWith(color: AppColors.textPrimary)),
         ],
       ),
     );
