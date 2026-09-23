@@ -18,8 +18,21 @@ class SuperAdminScaffold extends ConsumerWidget {
   final Widget child;
 
   static const _navItems = [
-    (label: 'Dashboard', icon: Icons.dashboard_outlined, route: AppRoutes.superAdminDashboard),
-    (label: 'Restaurants', icon: Icons.storefront_outlined, route: AppRoutes.superAdminRestaurants),
+    (
+      label: 'Dashboard',
+      icon: Icons.dashboard_outlined,
+      route: AppRoutes.superAdminDashboard
+    ),
+    (
+      label: 'Analytics',
+      icon: Icons.insights_outlined,
+      route: AppRoutes.superAdminAnalytics
+    ),
+    (
+      label: 'Restaurants',
+      icon: Icons.storefront_outlined,
+      route: AppRoutes.superAdminRestaurants
+    ),
     (
       label: 'Create Restaurant',
       icon: Icons.add_business_outlined,
@@ -50,7 +63,8 @@ class SuperAdminScaffold extends ConsumerWidget {
         title: const AppLogo(fontSize: 18),
         backgroundColor: AppColors.surface,
       ),
-      drawer: Drawer(child: _SideNav(currentLocation: currentLocation, isDrawer: true)),
+      drawer: Drawer(
+          child: _SideNav(currentLocation: currentLocation, isDrawer: true)),
       body: child,
     );
   }
@@ -125,12 +139,17 @@ class _NavTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           child: Row(
             children: [
-              Icon(icon, size: 20, color: selected ? AppColors.primaryDark : AppColors.textSecondary),
+              Icon(icon,
+                  size: 20,
+                  color: selected
+                      ? AppColors.primaryDark
+                      : AppColors.textSecondary),
               const SizedBox(width: 12),
               Text(
                 label,
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: selected ? AppColors.primaryDark : AppColors.textPrimary,
+                  color:
+                      selected ? AppColors.primaryDark : AppColors.textPrimary,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                 ),
               ),

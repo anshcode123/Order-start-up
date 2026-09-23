@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { Prisma } = require('@prisma/client');
 const prisma = require('../lib/prisma');
 const { emitToRestaurant } = require('./socketService');
+const { sendOrderNotification } = require('./whatsappService');
 
 const TABLE_NUMBER_MAX_LENGTH = 30;
 const MAX_QUANTITY_PER_ITEM = 999; // defensive cap, not a business rule
@@ -169,7 +170,12 @@ async function createOrderFromCart({ restaurantSlug, tableNumber: rawTableNumber
         publicToken: generatePublicToken(),
         items: { create: orderLines },
       },
-      include: { items: true, restaurant: { select: { name: true } } },
+      include: {
+        items: true,
+        restaurant: {
+          select: { name: true, whatsappNumber: true, phone: true },
+        },
+      },
     });
     return createdOrder;
   });
@@ -185,6 +191,18 @@ async function createOrderFromCart({ restaurantSlug, tableNumber: rawTableNumber
     status: order.status,
     createdAt: order.createdAt,
   });
+
+  // Phase 8: WhatsApp Order Notification
+  // Completely isolated from order creation - any WhatsApp failure,
+  // network timeout, or missing credentials will never roll back or fail the order.
+  try {
+    await sendOrderNotification({
+      order,
+      restaurant: order.restaurant || restaurant,
+    });
+  } catch (whatsappErr) {
+    console.error('WhatsApp notification dispatch error:', whatsappErr.message);
+  }
 
   return order;
 }

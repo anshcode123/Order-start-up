@@ -15,18 +15,26 @@ class AppRoutes {
   static const String dashboardSettings = '/dashboard/settings';
 
   // Route templates (as registered with go_router, with :id placeholders)
-  static const String dashboardMenuItemEditTemplate = '/dashboard/menu/:id/edit';
+  static const String dashboardMenuItemEditTemplate =
+      '/dashboard/menu/:id/edit';
 
   // Super Admin
   static const String superAdminDashboard = '/super-admin';
+  static const String superAdminAnalytics = '/super-admin/analytics';
   static const String superAdminRestaurants = '/super-admin/restaurants';
-  static const String superAdminRestaurantCreate = '/super-admin/restaurants/create';
-  static String superAdminRestaurantDetail(String id) => '/super-admin/restaurants/$id';
-  static String superAdminRestaurantQr(String id) => '/super-admin/restaurants/$id/qr';
+  static const String superAdminRestaurantCreate =
+      '/super-admin/restaurants/create';
+
+  static String superAdminRestaurantDetail(String id) =>
+      '/super-admin/restaurants/$id';
+  static String superAdminRestaurantQr(String id) =>
+      '/super-admin/restaurants/$id/qr';
 
   // Route templates (as registered with go_router, with :id placeholders)
-  static const String superAdminRestaurantDetailTemplate = '/super-admin/restaurants/:id';
-  static const String superAdminRestaurantQrTemplate = '/super-admin/restaurants/:id/qr';
+  static const String superAdminRestaurantDetailTemplate =
+      '/super-admin/restaurants/:id';
+  static const String superAdminRestaurantQrTemplate =
+      '/super-admin/restaurants/:id/qr';
 
   // Customer-facing (Phase 5) - public, no auth
   static String customerMenu(String restaurantSlug) => '/menu/$restaurantSlug';

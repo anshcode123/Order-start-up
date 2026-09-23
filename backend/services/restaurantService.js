@@ -50,6 +50,7 @@ async function createRestaurantWithAdmin({ restaurantData, adminData }) {
         phone: restaurantData.phone || '',
         email: restaurantData.email || '',
         address: restaurantData.address || '',
+        whatsappNumber: restaurantData.whatsappNumber || '',
         isActive: true,
       },
     });

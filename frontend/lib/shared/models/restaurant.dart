@@ -12,6 +12,7 @@ class Restaurant {
     this.phone,
     this.email,
     this.address,
+    this.whatsappNumber,
     this.adminEmail,
     this.createdAt,
   });
@@ -24,6 +25,7 @@ class Restaurant {
   final String? phone;
   final String? email;
   final String? address;
+  final String? whatsappNumber;
   final String? adminEmail;
   final DateTime? createdAt;
 
@@ -37,6 +39,7 @@ class Restaurant {
       phone: json['phone'] as String?,
       email: json['email'] as String?,
       address: json['address'] as String?,
+      whatsappNumber: json['whatsappNumber'] as String?,
       adminEmail: json['adminEmail'] as String?,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'] as String)
@@ -82,9 +85,11 @@ class RestaurantDetail {
 
   factory RestaurantDetail.fromJson(Map<String, dynamic> json) {
     return RestaurantDetail(
-      restaurant: Restaurant.fromJson(json['restaurant'] as Map<String, dynamic>),
+      restaurant:
+          Restaurant.fromJson(json['restaurant'] as Map<String, dynamic>),
       admin: json['admin'] != null
-          ? RestaurantAdminSummary.fromJson(json['admin'] as Map<String, dynamic>)
+          ? RestaurantAdminSummary.fromJson(
+              json['admin'] as Map<String, dynamic>)
           : null,
       menuUrl: json['menuUrl'] as String,
     );
@@ -92,28 +97,175 @@ class RestaurantDetail {
 }
 
 /// Stats + recent restaurants for the Super Admin dashboard
-/// (GET /api/admin/dashboard).
+/// (GET /api/super-admin/dashboard/stats or /api/admin/dashboard).
 class SuperAdminDashboard {
   const SuperAdminDashboard({
     required this.totalRestaurants,
     required this.activeRestaurants,
     required this.inactiveRestaurants,
+    required this.totalOrders,
+    required this.todayOrders,
+    required this.pendingOrders,
+    required this.completedOrders,
     required this.recentRestaurants,
   });
 
   final int totalRestaurants;
   final int activeRestaurants;
   final int inactiveRestaurants;
+  final int totalOrders;
+  final int todayOrders;
+  final int pendingOrders;
+  final int completedOrders;
   final List<Restaurant> recentRestaurants;
 
   factory SuperAdminDashboard.fromJson(Map<String, dynamic> json) {
-    final stats = json['stats'] as Map<String, dynamic>;
-    final recent = (json['recentRestaurants'] as List).cast<Map<String, dynamic>>();
+    final stats = json['stats'] as Map<String, dynamic>? ?? {};
+    final recent =
+        (json['recentRestaurants'] as List?)?.cast<Map<String, dynamic>>() ??
+            [];
     return SuperAdminDashboard(
-      totalRestaurants: stats['totalRestaurants'] as int,
-      activeRestaurants: stats['activeRestaurants'] as int,
-      inactiveRestaurants: stats['inactiveRestaurants'] as int,
+      totalRestaurants: (stats['totalRestaurants'] as int?) ?? 0,
+      activeRestaurants: (stats['activeRestaurants'] as int?) ?? 0,
+      inactiveRestaurants: (stats['inactiveRestaurants'] as int?) ?? 0,
+      totalOrders: (stats['totalOrders'] as int?) ?? 0,
+      todayOrders: (stats['todayOrders'] as int?) ?? 0,
+      pendingOrders: (stats['pendingOrders'] as int?) ?? 0,
+      completedOrders: (stats['completedOrders'] as int?) ?? 0,
       recentRestaurants: recent.map(Restaurant.fromJson).toList(),
+    );
+  }
+}
+
+/// Platform Order Analytics model
+class OrderAnalytics {
+  const OrderAnalytics({
+    required this.totalOrders,
+    required this.todayOrders,
+    required this.thisWeekOrders,
+    required this.thisMonthOrders,
+    required this.filteredOrders,
+    required this.filteredRevenue,
+    required this.statusBreakdown,
+    required this.restaurants,
+  });
+
+  final int totalOrders;
+  final int todayOrders;
+  final int thisWeekOrders;
+  final int thisMonthOrders;
+  final int filteredOrders;
+  final String filteredRevenue;
+  final Map<String, int> statusBreakdown;
+  final List<RestaurantOrderStats> restaurants;
+
+  factory OrderAnalytics.fromJson(Map<String, dynamic> json) {
+    final summary = json['summary'] as Map<String, dynamic>? ?? {};
+    final rawBreakdown = json['statusBreakdown'] as Map<String, dynamic>? ?? {};
+    final breakdown =
+        rawBreakdown.map((k, v) => MapEntry(k, (v as num).toInt()));
+    final rawRestaurants =
+        (json['restaurants'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+    return OrderAnalytics(
+      totalOrders: (summary['totalOrders'] as int?) ?? 0,
+      todayOrders: (summary['todayOrders'] as int?) ?? 0,
+      thisWeekOrders: (summary['thisWeekOrders'] as int?) ?? 0,
+      thisMonthOrders: (summary['thisMonthOrders'] as int?) ?? 0,
+      filteredOrders: (summary['filteredOrders'] as int?) ?? 0,
+      filteredRevenue: (summary['filteredRevenue'] as String?) ?? '0',
+      statusBreakdown: breakdown,
+      restaurants: rawRestaurants.map(RestaurantOrderStats.fromJson).toList(),
+    );
+  }
+}
+
+/// Per-restaurant order stats in platform analytics
+class RestaurantOrderStats {
+  const RestaurantOrderStats({
+    required this.id,
+    required this.name,
+    required this.slug,
+    required this.isActive,
+    required this.totalOrders,
+    required this.todayOrders,
+    required this.pendingOrders,
+    required this.completedOrders,
+    this.phone,
+    this.email,
+  });
+
+  final String id;
+  final String name;
+  final String slug;
+  final bool isActive;
+  final int totalOrders;
+  final int todayOrders;
+  final int pendingOrders;
+  final int completedOrders;
+  final String? phone;
+  final String? email;
+
+  factory RestaurantOrderStats.fromJson(Map<String, dynamic> json) {
+    return RestaurantOrderStats(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      slug: json['slug'] as String,
+      isActive: (json['isActive'] as bool?) ?? true,
+      totalOrders: (json['totalOrders'] as int?) ?? 0,
+      todayOrders: (json['todayOrders'] as int?) ?? 0,
+      pendingOrders: (json['pendingOrders'] as int?) ?? 0,
+      completedOrders: (json['completedOrders'] as int?) ?? 0,
+      phone: json['phone'] as String?,
+      email: json['email'] as String?,
+    );
+  }
+}
+
+/// Usage statistics for a specific restaurant
+class RestaurantUsageStats {
+  const RestaurantUsageStats({
+    required this.totalCategories,
+    required this.totalMenuItems,
+    required this.availableMenuItems,
+    required this.unavailableMenuItems,
+    required this.totalOrders,
+    required this.todayOrders,
+    required this.pendingOrders,
+    required this.completedOrders,
+    required this.totalRevenue,
+    required this.statusBreakdown,
+  });
+
+  final int totalCategories;
+  final int totalMenuItems;
+  final int availableMenuItems;
+  final int unavailableMenuItems;
+  final int totalOrders;
+  final int todayOrders;
+  final int pendingOrders;
+  final int completedOrders;
+  final String totalRevenue;
+  final Map<String, int> statusBreakdown;
+
+  factory RestaurantUsageStats.fromJson(Map<String, dynamic> json) {
+    final stats = json['stats'] as Map<String, dynamic>? ?? {};
+    final rawBreakdown =
+        stats['statusBreakdown'] as Map<String, dynamic>? ?? {};
+    final breakdown =
+        rawBreakdown.map((k, v) => MapEntry(k, (v as num).toInt()));
+
+    return RestaurantUsageStats(
+      totalCategories: (stats['totalCategories'] as int?) ?? 0,
+      totalMenuItems: (stats['totalMenuItems'] as int?) ?? 0,
+      availableMenuItems: (stats['availableMenuItems'] as int?) ?? 0,
+      unavailableMenuItems: (stats['unavailableMenuItems'] as int?) ?? 0,
+      totalOrders: (stats['totalOrders'] as int?) ?? 0,
+      todayOrders: (stats['todayOrders'] as int?) ?? 0,
+      pendingOrders: (stats['pendingOrders'] as int?) ?? 0,
+      completedOrders: (stats['completedOrders'] as int?) ?? 0,
+      totalRevenue: (stats['totalRevenue'] as String?) ?? '0',
+      statusBreakdown: breakdown,
     );
   }
 }

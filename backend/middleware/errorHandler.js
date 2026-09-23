@@ -6,12 +6,19 @@
 function errorHandler(err, req, res, next) {
   console.error(err.stack || err.message || err);
 
-  const statusCode = err.statusCode && err.statusCode >= 400 ? err.statusCode : 500;
+  const statusCode = err.statusCode && err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode : 500;
+
+  const isProd = process.env.NODE_ENV === 'production';
+  let message = err.message || 'Internal server error';
+  if (statusCode === 500 && isProd) {
+    message = 'An unexpected server error occurred. Please try again later.';
+  }
 
   res.status(statusCode).json({
     success: false,
-    message: err.message || 'Internal server error',
+    message,
   });
 }
+
 
 module.exports = errorHandler;

@@ -11,11 +11,8 @@ import 'package:scanserve/features/restaurant_admin/widgets/order_status_chip.da
 import 'package:scanserve/shared/models/restaurant_order.dart';
 
 /// /dashboard/orders - incoming orders for the logged-in Restaurant
-/// Admin's own restaurant, split into tabs (Phase 7 spec #12). Live via
-/// restaurantOrdersProvider, which is patched in place by socket events
-/// rather than re-fetched (see restaurant_order_socket_provider.dart,
-/// which is actually connected up at the RestaurantAdminScaffold level
-/// so it's already live before this screen even opens).
+/// Admin's own restaurant, split into tabs. Live via restaurantOrdersProvider,
+/// which is patched in real-time by socket events.
 class OrdersScreen extends ConsumerStatefulWidget {
   const OrdersScreen({super.key});
 
@@ -23,10 +20,8 @@ class OrdersScreen extends ConsumerStatefulWidget {
   ConsumerState<OrdersScreen> createState() => _OrdersScreenState();
 }
 
-// "New" is PENDING under the hood. CANCELLED/REJECTED share a final tab
-// so a rejected/cancelled order is never simply lost from view, even
-// though the spec's primary list names only the first 5.
 const _tabs = [
+  (label: 'All', statuses: <String>[]),
   (label: 'New', statuses: ['PENDING']),
   (label: 'Accepted', statuses: ['ACCEPTED']),
   (label: 'Preparing', statuses: ['PREPARING']),
@@ -38,6 +33,8 @@ const _tabs = [
 class _OrdersScreenState extends ConsumerState<OrdersScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -48,7 +45,19 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  bool _matchesSearch(RestaurantOrder order) {
+    if (_searchQuery.isEmpty) return true;
+    final q = _searchQuery.toLowerCase();
+    if (order.tableNumber.toLowerCase().contains(q)) return true;
+    if (order.id.toLowerCase().contains(q)) return true;
+    for (final item in order.items) {
+      if (item.itemName.toLowerCase().contains(q)) return true;
+    }
+    return false;
   }
 
   @override
@@ -64,60 +73,122 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
               Responsive.pagePadding(context),
               Responsive.pagePadding(context),
               Responsive.pagePadding(context),
-              0,
+              12,
             ),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text('Orders', style: AppTextStyles.displayMedium),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Orders', style: AppTextStyles.displayMedium),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Live order queue updated in real-time',
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.textMuted),
+                    ),
+                  ],
+                ),
+                IconButton(
+                  tooltip: 'Refresh orders',
+                  icon:
+                      const Icon(Icons.refresh, color: AppColors.textSecondary),
+                  onPressed: () =>
+                      ref.read(restaurantOrdersProvider.notifier).refresh(),
+                ),
+              ],
             ),
           ),
-          ordersAsync.when(
-            loading: () => const Expanded(
-                child: Center(child: CircularProgressIndicator())),
-            error: (error, _) => Expanded(
-              child: Center(
-                child: Text(apiErrorMessage(error),
-                    style: AppTextStyles.body.copyWith(color: AppColors.error)),
+          Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: Responsive.pagePadding(context),
+            ),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (val) => setState(() => _searchQuery = val.trim()),
+              decoration: InputDecoration(
+                hintText: 'Search by table number, order #, or item...',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: AppColors.surface,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
               ),
             ),
-            data: (orders) => Expanded(child: _buildTabs(context, orders)),
+          ),
+          const SizedBox(height: 12),
+          ordersAsync.when(
+            loading: () => const Expanded(
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (error, _) => Expanded(
+              child: Center(
+                child: Text(
+                  apiErrorMessage(error),
+                  style: AppTextStyles.body.copyWith(color: AppColors.error),
+                ),
+              ),
+            ),
+            data: (allOrders) {
+              final filteredOrders = allOrders.where(_matchesSearch).toList();
+              return Expanded(
+                child: Column(
+                  children: [
+                    TabBar(
+                      controller: _tabController,
+                      isScrollable: true,
+                      labelColor: AppColors.primaryDark,
+                      unselectedLabelColor: AppColors.textSecondary,
+                      indicatorColor: AppColors.primary,
+                      tabs: [
+                        for (final tab in _tabs)
+                          Tab(
+                            text: tab.statuses.isEmpty
+                                ? '${tab.label} (${filteredOrders.length})'
+                                : '${tab.label} (${filteredOrders.where((o) => tab.statuses.contains(o.status)).length})',
+                          ),
+                      ],
+                    ),
+                    Expanded(
+                      child: TabBarView(
+                        controller: _tabController,
+                        children: [
+                          for (final tab in _tabs)
+                            _OrderList(
+                              orders: tab.statuses.isEmpty
+                                  ? filteredOrders
+                                  : filteredOrders
+                                      .where((o) =>
+                                          tab.statuses.contains(o.status))
+                                      .toList(),
+                              emptyLabel: _searchQuery.isNotEmpty
+                                  ? 'No orders found matching "$_searchQuery"'
+                                  : 'No ${tab.label.toLowerCase()} orders right now.',
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildTabs(BuildContext context, List<RestaurantOrder> orders) {
-    return Column(
-      children: [
-        TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          labelColor: AppColors.primaryDark,
-          unselectedLabelColor: AppColors.textSecondary,
-          indicatorColor: AppColors.primary,
-          tabs: [
-            for (final tab in _tabs)
-              Tab(
-                  text:
-                      '${tab.label} (${orders.where((o) => tab.statuses.contains(o.status)).length})'),
-          ],
-        ),
-        Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children: [
-              for (final tab in _tabs)
-                _OrderList(
-                  orders: orders
-                      .where((o) => tab.statuses.contains(o.status))
-                      .toList(),
-                  emptyLabel: 'No ${tab.label.toLowerCase()} orders.',
-                ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }
@@ -132,16 +203,18 @@ class _OrderList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     if (orders.isEmpty) {
       return RefreshIndicator(
-        onRefresh: () async => ref.invalidate(restaurantOrdersProvider),
+        onRefresh: () => ref.read(restaurantOrdersProvider.notifier).refresh(),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 80),
               child: Center(
-                child: Text(emptyLabel,
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.textMuted)),
+                child: Text(
+                  emptyLabel,
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: AppColors.textMuted),
+                ),
               ),
             ),
           ],
@@ -150,7 +223,7 @@ class _OrderList extends ConsumerWidget {
     }
 
     return RefreshIndicator(
-      onRefresh: () async => ref.invalidate(restaurantOrdersProvider),
+      onRefresh: () => ref.read(restaurantOrdersProvider.notifier).refresh(),
       child: ListView.builder(
         padding: EdgeInsets.all(Responsive.pagePadding(context)),
         itemCount: orders.length,
@@ -166,8 +239,6 @@ class _OrderCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Highlight PENDING orders - the ones needing attention right now
-    // (Phase 7 spec #8 - "Highlight it appropriately").
     final isNew = order.status == 'PENDING';
 
     return InkWell(
@@ -182,16 +253,19 @@ class _OrderCard extends ConsumerWidget {
               : AppColors.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-              color: isNew ? AppColors.primary : AppColors.border,
-              width: isNew ? 1.5 : 1),
+            color: isNew ? AppColors.primary : AppColors.border,
+            width: isNew ? 1.5 : 1,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Text('Order #${order.id.substring(0, 8).toUpperCase()}',
-                    style: AppTextStyles.title.copyWith(fontSize: 15)),
+                Text(
+                  'Order #${order.id.substring(0, 8).toUpperCase()}',
+                  style: AppTextStyles.title.copyWith(fontSize: 15),
+                ),
                 const Spacer(),
                 OrderStatusChip(status: order.status),
               ],
@@ -215,9 +289,11 @@ class _OrderCard extends ConsumerWidget {
                             .copyWith(color: AppColors.textPrimary),
                       ),
                     ),
-                    Text(item.subtotal,
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: AppColors.textPrimary)),
+                    Text(
+                      item.subtotal,
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.textPrimary),
+                    ),
                   ],
                 ),
               ),
@@ -229,8 +305,10 @@ class _OrderCard extends ConsumerWidget {
                 const Spacer(),
                 Text(
                   order.total,
-                  style: AppTextStyles.title
-                      .copyWith(color: AppColors.primaryDark, fontSize: 14),
+                  style: AppTextStyles.title.copyWith(
+                    color: AppColors.primaryDark,
+                    fontSize: 14,
+                  ),
                 ),
               ],
             ),

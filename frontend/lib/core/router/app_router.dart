@@ -23,6 +23,7 @@ import 'package:scanserve/features/super_admin/screens/restaurant_create_screen.
 import 'package:scanserve/features/super_admin/screens/restaurant_detail_screen.dart';
 import 'package:scanserve/features/super_admin/screens/restaurant_qr_screen.dart';
 import 'package:scanserve/features/super_admin/screens/restaurants_list_screen.dart';
+import 'package:scanserve/features/super_admin/screens/super_admin_analytics_screen.dart';
 import 'package:scanserve/features/super_admin/screens/super_admin_dashboard_screen.dart';
 import 'package:scanserve/features/super_admin/widgets/super_admin_scaffold.dart';
 
@@ -156,6 +157,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.superAdminDashboard,
             name: 'super-admin-dashboard',
             builder: (context, state) => const SuperAdminDashboardScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.superAdminAnalytics,
+            name: 'super-admin-analytics',
+            builder: (context, state) => const SuperAdminAnalyticsScreen(),
           ),
           GoRoute(
             path: AppRoutes.superAdminRestaurants,

@@ -28,7 +28,12 @@ class RestaurantAdminQrScreen extends ConsumerWidget {
 
   Future<void> _copyMenuUrl(BuildContext context, String menuUrl) async {
     await Clipboard.setData(ClipboardData(text: menuUrl));
-    if (context.mounted) showSuccessSnackBar(context, 'Menu URL copied');
+    if (context.mounted)
+      showSuccessSnackBar(context, 'Menu URL copied to clipboard');
+  }
+
+  void _openPublicMenu(String menuUrl) {
+    web.window.open(menuUrl, '_blank');
   }
 
   @override
@@ -41,15 +46,29 @@ class RestaurantAdminQrScreen extends ConsumerWidget {
         child: SingleChildScrollView(
           padding: EdgeInsets.all(Responsive.pagePadding(context)),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
+            constraints: const BoxConstraints(maxWidth: 480),
             child: qrAsync.when(
               loading: () => const Padding(
-                padding: EdgeInsets.symmetric(vertical: 60),
+                padding: EdgeInsets.symmetric(vertical: 80),
                 child: Center(child: CircularProgressIndicator()),
               ),
-              error: (error, _) => Text(
-                apiErrorMessage(error),
-                style: AppTextStyles.body.copyWith(color: AppColors.error),
+              error: (error, _) => Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      apiErrorMessage(error),
+                      style:
+                          AppTextStyles.body.copyWith(color: AppColors.error),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    AppPrimaryButton(
+                      label: 'Retry',
+                      onPressed: () => ref.refresh(ownRestaurantQrProvider),
+                    ),
+                  ],
+                ),
               ),
               data: (qr) {
                 final base64Data = qr.qrDataUrl.split(',').last;
@@ -64,35 +83,83 @@ class RestaurantAdminQrScreen extends ConsumerWidget {
                   ),
                   child: Column(
                     children: [
-                      Text(qr.restaurantName,
-                          style: AppTextStyles.headline,
-                          textAlign: TextAlign.center),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  qr.restaurantName,
+                                  style: AppTextStyles.headline,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Public QR Code & Menu Link',
+                                  style: AppTextStyles.bodySmall
+                                      .copyWith(color: AppColors.textMuted),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Refresh QR',
+                            icon: const Icon(Icons.refresh,
+                                color: AppColors.textSecondary),
+                            onPressed: () {
+                              ref.invalidate(ownRestaurantQrProvider);
+                              showSuccessSnackBar(context, 'QR code refreshed');
+                            },
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 24),
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
+                          color: Colors.white,
                           border: Border.all(color: AppColors.border),
                           borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
                         child: Image.memory(bytes, width: 240, height: 240),
                       ),
                       const SizedBox(height: 20),
-                      Text('Menu URL',
-                          style: AppTextStyles.bodySmall
-                              .copyWith(color: AppColors.textMuted)),
-                      const SizedBox(height: 4),
-                      SelectableText(
-                        qr.menuUrl,
-                        textAlign: TextAlign.center,
+                      Text(
+                        'Direct Public Menu URL',
                         style: AppTextStyles.bodySmall
-                            .copyWith(color: AppColors.textPrimary),
+                            .copyWith(color: AppColors.textMuted),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.background,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: SelectableText(
+                          qr.menuUrl,
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w500),
+                        ),
                       ),
                       const SizedBox(height: 24),
                       Row(
                         children: [
                           Expanded(
                             child: AppOutlinedButton(
-                              label: 'Copy Menu URL',
+                              label: 'Copy URL',
                               expand: true,
                               onPressed: () =>
                                   _copyMenuUrl(context, qr.menuUrl),
@@ -108,6 +175,19 @@ class RestaurantAdminQrScreen extends ConsumerWidget {
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 12),
+                      AppOutlinedButton(
+                        label: 'Open Public Menu in New Tab',
+                        expand: true,
+                        onPressed: () => _openPublicMenu(qr.menuUrl),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Print this QR code and place it on dining tables. Customers can scan to instantly browse your menu and order without logging in.',
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.textMuted, fontSize: 12),
                       ),
                     ],
                   ),

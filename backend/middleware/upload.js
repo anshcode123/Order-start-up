@@ -21,4 +21,18 @@ const uploadMenuItemImage = multer({
   },
 }).single('image');
 
-module.exports = { uploadMenuItemImage, MAX_FILE_SIZE_BYTES, ALLOWED_MIME_TYPES };
+const uploadLogoImage = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_FILE_SIZE_BYTES },
+  fileFilter: (req, file, cb) => {
+    if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+      const err = new Error('Only JPEG, PNG, and WEBP images are allowed');
+      err.statusCode = 400;
+      return cb(err);
+    }
+    cb(null, true);
+  },
+}).single('logo');
+
+module.exports = { uploadMenuItemImage, uploadLogoImage, MAX_FILE_SIZE_BYTES, ALLOWED_MIME_TYPES };
+

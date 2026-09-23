@@ -10,32 +10,44 @@ const { emitToRestaurant, emitToOrder } = require('../services/socketService');
 function serializeOrder(order) {
   return {
     id: order.id,
+    publicToken: order.publicToken,
+    orderNumber: deriveOrderNumber(order.publicToken),
     tableNumber: order.tableNumber,
     status: order.status,
-    items: order.items.map(serializeOrderItem),
-    total: order.totalAmount.toString(),
+    items: order.items ? order.items.map(serializeOrderItem) : [],
+    total: order.totalAmount ? order.totalAmount.toString() : '0',
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
   };
 }
 
 // GET /api/restaurant/orders
-// Optional ?status=PENDING filter. Always scoped to the caller's own
-// restaurant via req.user.restaurantId - never a value from the client
-// (Phase 6 spec #10, #21).
+// Optional ?status=PENDING filter and ?search= query.
+// Always scoped to the caller's own restaurant via req.user.restaurantId.
 async function getOrders(req, res, next) {
   try {
-    const { status } = req.query;
+    const { status, search } = req.query;
 
     const where = { restaurantId: req.user.restaurantId };
-    if (status) {
-      if (!ORDER_STATUSES.includes(status)) {
+    if (status && status.toUpperCase() !== 'ALL') {
+      const upper = status.toUpperCase();
+      if (!ORDER_STATUSES.includes(upper)) {
         return res.status(400).json({
           success: false,
           message: `status must be one of: ${ORDER_STATUSES.join(', ')}`,
         });
       }
-      where.status = status;
+      where.status = upper;
+    }
+
+    if (search && typeof search === 'string') {
+      const q = search.trim();
+      if (q) {
+        where.OR = [
+          { tableNumber: { contains: q, mode: 'insensitive' } },
+          { publicToken: { contains: q, mode: 'insensitive' } },
+        ];
+      }
     }
 
     const orders = await prisma.order.findMany({
@@ -53,6 +65,7 @@ async function getOrders(req, res, next) {
     next(err);
   }
 }
+
 
 // GET /api/restaurant/orders/:id
 async function getOrderById(req, res, next) {

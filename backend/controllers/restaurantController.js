@@ -59,6 +59,7 @@ async function createRestaurant(req, res, next) {
         phone: restaurant.phone,
         email: restaurant.email,
         address: restaurant.address,
+        whatsappNumber: restaurant.whatsappNumber,
         isActive: restaurant.isActive,
         createdAt: restaurant.createdAt,
       },
@@ -83,7 +84,25 @@ async function createRestaurant(req, res, next) {
 // GET /api/admin/restaurants
 async function getRestaurants(req, res, next) {
   try {
-    const restaurants = await prisma.restaurant.findMany({ orderBy: { createdAt: 'desc' } });
+    const { search } = req.query;
+    const where = {};
+
+    if (search && typeof search === 'string') {
+      const q = search.trim();
+      if (q) {
+        where.OR = [
+          { name: { contains: q, mode: 'insensitive' } },
+          { slug: { contains: q, mode: 'insensitive' } },
+          { email: { contains: q, mode: 'insensitive' } },
+          { phone: { contains: q, mode: 'insensitive' } },
+        ];
+      }
+    }
+
+    const restaurants = await prisma.restaurant.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
 
     const restaurantIds = restaurants.map((r) => r.id);
     const admins = await prisma.user.findMany({
@@ -100,6 +119,10 @@ async function getRestaurants(req, res, next) {
         id: restaurant.id,
         name: restaurant.name,
         slug: restaurant.slug,
+        phone: restaurant.phone || '',
+        email: restaurant.email || '',
+        address: restaurant.address || '',
+        whatsappNumber: restaurant.whatsappNumber || '',
         isActive: restaurant.isActive,
         createdAt: restaurant.createdAt,
         adminEmail: admin ? admin.email : null,
@@ -111,6 +134,7 @@ async function getRestaurants(req, res, next) {
     next(err);
   }
 }
+
 
 // GET /api/admin/restaurants/:id
 async function getRestaurantById(req, res, next) {
@@ -134,6 +158,7 @@ async function getRestaurantById(req, res, next) {
         phone: restaurant.phone,
         email: restaurant.email,
         address: restaurant.address,
+        whatsappNumber: restaurant.whatsappNumber,
         isActive: restaurant.isActive,
         createdAt: restaurant.createdAt,
         updatedAt: restaurant.updatedAt,
@@ -157,7 +182,7 @@ async function updateRestaurant(req, res, next) {
       return res.status(404).json({ success: false, message: 'Restaurant not found' });
     }
 
-    const { name, description, phone, email, address, slug } = req.body;
+    const { name, description, phone, email, address, slug, whatsappNumber } = req.body;
 
     if (email && !validator.isEmail(email)) {
       return res.status(400).json({ success: false, message: 'Restaurant email is invalid' });
@@ -169,6 +194,7 @@ async function updateRestaurant(req, res, next) {
     if (phone !== undefined) data.phone = phone;
     if (email !== undefined) data.email = email;
     if (address !== undefined) data.address = address;
+    if (whatsappNumber !== undefined) data.whatsappNumber = whatsappNumber;
 
     if (slug !== undefined && slug !== restaurant.slug) {
       const clash = await prisma.restaurant.findUnique({ where: { slug } });
@@ -190,6 +216,7 @@ async function updateRestaurant(req, res, next) {
         phone: updated.phone,
         email: updated.email,
         address: updated.address,
+        whatsappNumber: updated.whatsappNumber,
         isActive: updated.isActive,
         updatedAt: updated.updatedAt,
       },

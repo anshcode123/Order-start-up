@@ -16,8 +16,11 @@ const menuItemRoutes = require('./routes/menuItems');
 const restaurantSelfRoutes = require('./routes/restaurantSelf');
 const publicMenuRoutes = require('./routes/publicMenu');
 const publicOrderRoutes = require('./routes/publicOrders');
+
 const orderRoutes = require('./routes/orders');
+const superAdminRoutes = require('./routes/superAdmin');
 const notFound = require('./middleware/notFound');
+
 const errorHandler = require('./middleware/errorHandler');
 
 const PORT = process.env.PORT || 5000;
@@ -34,7 +37,9 @@ function createApp() {
   app.use('/api/health', healthRoutes);
   app.use('/api/auth', authRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/super-admin', superAdminRoutes);
   app.use('/api/restaurants', restaurantRoutes);
+
   app.use('/api/restaurant/categories', categoryRoutes);
   app.use('/api/restaurant/menu-items', menuItemRoutes);
   app.use('/api/restaurant/orders', orderRoutes); // Phase 6
