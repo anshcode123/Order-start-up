@@ -28,8 +28,9 @@ class RestaurantAdminQrScreen extends ConsumerWidget {
 
   Future<void> _copyMenuUrl(BuildContext context, String menuUrl) async {
     await Clipboard.setData(ClipboardData(text: menuUrl));
-    if (context.mounted)
+    if (context.mounted) {
       showSuccessSnackBar(context, 'Menu URL copied to clipboard');
+    }
   }
 
   void _openPublicMenu(String menuUrl) {

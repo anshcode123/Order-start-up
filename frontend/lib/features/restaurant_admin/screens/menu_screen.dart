@@ -117,7 +117,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Menu', style: AppTextStyles.displayMedium),
+              const Text('Menu', style: AppTextStyles.displayMedium),
               const SizedBox(height: 20),
               _buildFilters(categoriesAsync.valueOrNull ?? const []),
               const SizedBox(height: 20),

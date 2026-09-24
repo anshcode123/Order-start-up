@@ -92,7 +92,7 @@ class CategoriesScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Categories', style: AppTextStyles.displayMedium),
+              const Text('Categories', style: AppTextStyles.displayMedium),
               const SizedBox(height: 24),
               categoriesAsync.when(
                 loading: () => const Padding(

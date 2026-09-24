@@ -28,7 +28,7 @@ class HowItWorksSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text('How It Works', style: AppTextStyles.displayMedium),
+          const Text('How It Works', style: AppTextStyles.displayMedium),
           const SizedBox(height: 40),
           Flex(
             direction: isMobile ? Axis.vertical : Axis.horizontal,

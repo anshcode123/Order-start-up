@@ -73,8 +73,9 @@ class _RestaurantDetailScreenState
       });
       ref.invalidate(restaurantDetailProvider(widget.restaurantId));
       ref.invalidate(restaurantsListProvider(''));
-      if (mounted)
+      if (mounted) {
         showSuccessSnackBar(context, 'Restaurant details updated successfully');
+      }
     } catch (error) {
       if (mounted) showErrorSnackBar(context, apiErrorMessage(error));
     } finally {

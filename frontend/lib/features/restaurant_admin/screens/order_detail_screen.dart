@@ -116,7 +116,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           ),
         ),
         const SizedBox(height: 24),
-        Text('Items', style: AppTextStyles.title),
+        const Text('Items', style: AppTextStyles.title),
         const SizedBox(height: 12),
         Container(
           decoration: BoxDecoration(
@@ -154,7 +154,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
               const Divider(color: AppColors.border),
               Row(
                 children: [
-                  Text('Total', style: AppTextStyles.title),
+                  const Text('Total', style: AppTextStyles.title),
                   const Spacer(),
                   Text(order.total, style: AppTextStyles.title.copyWith(color: AppColors.primaryDark)),
                 ],
@@ -164,7 +164,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
         ),
         const SizedBox(height: 24),
         if (nextStatuses.isNotEmpty) ...[
-          Text('Update Status', style: AppTextStyles.title),
+          const Text('Update Status', style: AppTextStyles.title),
           const SizedBox(height: 12),
           Wrap(
             spacing: 10,

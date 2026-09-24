@@ -74,7 +74,7 @@ class _TableNumberFormState extends ConsumerState<_TableNumberForm> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('What table are you at?', style: AppTextStyles.headline),
+          const Text('What table are you at?', style: AppTextStyles.headline),
           const SizedBox(height: 8),
           Text(
             'This is the only information we need from you - no name, '
@@ -176,7 +176,7 @@ class _OrderReviewViewState extends ConsumerState<_OrderReviewView> {
         const Divider(height: 32, color: AppColors.border),
         Row(
           children: [
-            Text('Subtotal', style: AppTextStyles.title),
+            const Text('Subtotal', style: AppTextStyles.title),
             const Spacer(),
             Text(cart.subtotalDisplay,
                 style:

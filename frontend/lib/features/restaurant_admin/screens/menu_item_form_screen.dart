@@ -130,8 +130,9 @@ class _MenuItemFormScreenState extends ConsumerState<MenuItemFormScreen> {
 
       ref.invalidate(menuItemsProvider);
       ref.invalidate(restaurantAdminStatsProvider);
-      if (widget.isEditing)
+      if (widget.isEditing) {
         ref.invalidate(menuItemProvider(widget.menuItemId!));
+      }
 
       if (mounted) {
         showSuccessSnackBar(context,

@@ -109,7 +109,7 @@ class _RestaurantCreateScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Create Restaurant', style: AppTextStyles.displayMedium),
+                const Text('Create Restaurant', style: AppTextStyles.displayMedium),
                 const SizedBox(height: 24),
                 if (_errorMessage != null) ...[
                   Container(
@@ -129,7 +129,7 @@ class _RestaurantCreateScreenState
                   ),
                   const SizedBox(height: 20),
                 ],
-                _SectionHeading('RESTAURANT DETAILS'),
+                const _SectionHeading('RESTAURANT DETAILS'),
                 const SizedBox(height: 16),
                 _LabeledField(
                   label: 'Restaurant Name *',
@@ -160,7 +160,7 @@ class _RestaurantCreateScreenState
                     controller: _addressController,
                     maxLines: 2),
                 const SizedBox(height: 24),
-                _SectionHeading('RESTAURANT ADMIN'),
+                const _SectionHeading('RESTAURANT ADMIN'),
                 const SizedBox(height: 16),
                 _LabeledField(
                   label: 'Admin Name *',
@@ -174,8 +174,9 @@ class _RestaurantCreateScreenState
                   controller: _adminEmailController,
                   keyboardType: TextInputType.emailAddress,
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty)
+                    if (v == null || v.trim().isEmpty) {
                       return 'Admin email is required';
+                    }
                     return v.contains('@') ? null : 'Enter a valid email';
                   },
                 ),
@@ -184,10 +185,12 @@ class _RestaurantCreateScreenState
                   controller: _adminPasswordController,
                   obscureText: true,
                   validator: (v) {
-                    if (v == null || v.isEmpty)
+                    if (v == null || v.isEmpty) {
                       return 'Admin password is required';
-                    if (v.length < 8)
+                    }
+                    if (v.length < 8) {
                       return 'Password must be at least 8 characters';
+                    }
                     return null;
                   },
                 ),
@@ -234,7 +237,7 @@ class _CreateSuccessView extends StatelessWidget {
                   const Icon(Icons.check_circle_rounded,
                       color: AppColors.success, size: 40),
                   const SizedBox(height: 16),
-                  Text('Restaurant Created Successfully',
+                  const Text('Restaurant Created Successfully',
                       style: AppTextStyles.headline),
                   const SizedBox(height: 24),
                   _Row('Restaurant', result.restaurantName),
