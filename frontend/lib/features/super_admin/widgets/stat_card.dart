@@ -23,7 +23,7 @@ class StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
@@ -32,6 +32,7 @@ class StatCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -43,10 +44,12 @@ class StatCard extends StatelessWidget {
                     color: AppColors.textMuted,
                     fontWeight: FontWeight.w500,
                   ),
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              if (icon != null)
+              if (icon != null) ...[
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
@@ -55,21 +58,30 @@ class StatCard extends StatelessWidget {
                   ),
                   child: Icon(icon, size: 18, color: accentColor),
                 ),
+              ],
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            displayValue ?? '$value',
-            style: AppTextStyles.displayMedium.copyWith(
-              color: accentColor,
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
+          const SizedBox(height: 6),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                displayValue ?? '$value',
+                style: AppTextStyles.displayMedium.copyWith(
+                  color: accentColor,
+                  fontSize: 30,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ),
           if (subtitle != null) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               subtitle!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: AppTextStyles.bodySmall
                   .copyWith(color: AppColors.textMuted, fontSize: 11),
             ),

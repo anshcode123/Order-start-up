@@ -329,19 +329,22 @@ class _RestaurantAdminSettingsScreenState
                           ),
                         ),
                         const SizedBox(height: 16),
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text('Store Status', style: _labelStyle),
-                          subtitle: Text(
-                            _isActive
-                                ? 'Active — Customers can view menu and place orders.'
-                                : 'Inactive — Menu is temporarily unavailable for orders.',
-                            style: AppTextStyles.bodySmall
-                                .copyWith(color: AppColors.textMuted),
+                        Material(
+                          color: Colors.transparent,
+                          child: SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text('Store Status', style: _labelStyle),
+                            subtitle: Text(
+                              _isActive
+                                  ? 'Active — Customers can view menu and place orders.'
+                                  : 'Inactive — Menu is temporarily unavailable for orders.',
+                              style: AppTextStyles.bodySmall
+                                  .copyWith(color: AppColors.textMuted),
+                            ),
+                            value: _isActive,
+                            onChanged: (val) => setState(() => _isActive = val),
+                            activeThumbColor: AppColors.primary,
                           ),
-                          value: _isActive,
-                          onChanged: (val) => setState(() => _isActive = val),
-                          activeThumbColor: AppColors.primary,
                         ),
                       ],
                     ),

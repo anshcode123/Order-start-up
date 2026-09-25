@@ -1,11 +1,13 @@
 const http = require('http');
+const jwt = require('jsonwebtoken');
 const { io } = require('socket.io-client');
+require('dotenv').config();
 
 const BASE_URL = 'http://localhost:5000';
 let passed = 0;
 let failed = 0;
 
-function request(method, path, body = null, token = null) {
+function request(method, path, body = null, token = null, extraHeaders = {}) {
   return new Promise((resolve, reject) => {
     const url = new URL(path, BASE_URL);
     const options = {
@@ -15,6 +17,7 @@ function request(method, path, body = null, token = null) {
       path: url.pathname + url.search,
       headers: {
         'Content-Type': 'application/json',
+        ...extraHeaders,
       },
     };
     if (token) {
@@ -34,8 +37,8 @@ function request(method, path, body = null, token = null) {
     });
 
     req.on('error', reject);
-    if (body) {
-      req.write(typeof body === 'string' ? body : JSON.stringify(body));
+    if (body !== null && body !== undefined) {
+      req.write(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
     }
     req.end();
   });
@@ -56,8 +59,7 @@ async function runPhase12Tests() {
   console.log('  SCANSERVE PHASE 12 — FINAL PRODUCTION LAUNCH & SECURITY AUDIT');
   console.log('================================================================\n');
 
-  // ------------------------------------------------------------------
-  // Ensure test Super Admin & Spice Garden Restaurant Admin exist
+  // Ensure test Super Admin & Spice Garden Restaurant Admin exist (without deleting any existing data)
   const bcrypt = require('bcrypt');
   const prisma = require('./lib/prisma');
   const hashedPassword = await bcrypt.hash('Password123!', 10);
@@ -88,25 +90,27 @@ async function runPhase12Tests() {
     });
   }
 
+  // ------------------------------------------------------------------
   // 1. Health Check & Security Headers
   // ------------------------------------------------------------------
   console.log('--- 1. Health Endpoint & Security Headers ---');
   const healthRes = await request('GET', '/api/health');
   assert(healthRes.status === 200, 'GET /api/health returns 200 OK');
   assert(
-    healthRes.body?.status === 'ok' &&
+    healthRes.body?.success === true &&
+      healthRes.body?.status === 'ok' &&
       healthRes.body?.service === 'scanserve-backend' &&
       Boolean(healthRes.body?.timestamp),
-    'GET /api/health returns exact { status: "ok", service: "scanserve-backend", timestamp }'
+    'GET /api/health returns { success: true, status: "ok", service: "scanserve-backend", timestamp }'
   );
   assert(healthRes.headers['x-content-type-options'] === 'nosniff', 'Security header X-Content-Type-Options: nosniff is set');
   assert(['DENY', 'SAMEORIGIN'].includes(healthRes.headers['x-frame-options']), 'Security header X-Frame-Options is set');
   assert(healthRes.headers['x-powered-by'] === undefined, 'X-Powered-By header is hidden');
 
   // ------------------------------------------------------------------
-  // 2. Authentication & Role Isolation
+  // 2. Authentication, JWT Validation (Missing, Invalid, Expired, Tampered) & Role Security
   // ------------------------------------------------------------------
-  console.log('\n--- 2. Authentication & Role Security ---');
+  console.log('\n--- 2. Authentication, JWT Security & Role Isolation ---');
   const badLogin = await request('POST', '/api/auth/login', {
     email: 'superadmin@scanserve.com',
     password: 'WrongPassword!',
@@ -132,19 +136,43 @@ async function runPhase12Tests() {
   const ra1Token = ra1Login.body.token;
   const restAId = ra1Login.body.user.restaurantId;
 
-  // Check /api/auth/me with valid, invalid, and missing tokens
+  // Check /api/auth/me with valid, missing, invalid, tampered, and expired tokens
   const meValid = await request('GET', '/api/auth/me', null, ra1Token);
   assert(meValid.status === 200 && meValid.body?.user?.restaurantId === restAId, 'GET /api/auth/me returns authenticated user');
-
-  const meInvalid = await request('GET', '/api/auth/me', null, 'invalid.jwt.token');
-  assert(meInvalid.status === 401, 'Invalid JWT token rejected with 401');
 
   const meMissing = await request('GET', '/api/auth/me');
   assert(meMissing.status === 401, 'Missing JWT token rejected with 401');
 
+  const meInvalid = await request('GET', '/api/auth/me', null, 'invalid.jwt.token');
+  assert(meInvalid.status === 401, 'Invalid JWT token rejected with 401');
+
+  const tamperedToken = ra1Token.slice(0, -4) + 'xxxx';
+  const meTampered = await request('GET', '/api/auth/me', null, tamperedToken);
+  assert(meTampered.status === 401, 'Tampered JWT signature rejected with 401');
+
+  const expiredToken = jwt.sign(
+    { id: ra1Login.body.user.id, role: 'RESTAURANT_ADMIN', restaurant: restAId },
+    process.env.JWT_SECRET,
+    { expiresIn: '-10s' }
+  );
+  const meExpired = await request('GET', '/api/auth/me', null, expiredToken);
+  assert(meExpired.status === 401, 'Expired JWT token rejected with 401');
+
+  const logoutRes = await request('POST', '/api/auth/logout', {}, ra1Token);
+  assert(logoutRes.status === 200 && logoutRes.body?.success === true, 'POST /api/auth/logout succeeds cleanly');
+
   // Role isolation checks
   const raToSuperAdmin = await request('GET', '/api/super-admin/dashboard/stats', null, ra1Token);
-  assert(raToSuperAdmin.status === 403, 'RESTAURANT_ADMIN blocked from /api/super-admin/* (403)');
+  assert(raToSuperAdmin.status === 403, 'RESTAURANT_ADMIN blocked from /api/super-admin/dashboard/stats (403)');
+
+  const raToSaAnalytics = await request('GET', '/api/super-admin/analytics/orders', null, ra1Token);
+  assert(raToSaAnalytics.status === 403, 'RESTAURANT_ADMIN blocked from /api/super-admin/analytics/orders (403)');
+
+  const raToSaPlans = await request('GET', '/api/super-admin/plans', null, ra1Token);
+  assert(raToSaPlans.status === 403, 'RESTAURANT_ADMIN blocked from /api/super-admin/plans (403)');
+
+  const raToSaSubs = await request('GET', '/api/super-admin/subscriptions', null, ra1Token);
+  assert(raToSaSubs.status === 403, 'RESTAURANT_ADMIN blocked from /api/super-admin/subscriptions (403)');
 
   const raToAdminRests = await request('GET', '/api/admin/restaurants', null, ra1Token);
   assert(raToAdminRests.status === 403, 'RESTAURANT_ADMIN blocked from /api/admin/restaurants (403)');
@@ -153,13 +181,49 @@ async function runPhase12Tests() {
   assert(saToRestCategories.status === 403, 'SUPER_ADMIN blocked from RESTAURANT_ADMIN-only /api/categories (403)');
 
   const anonToOrders = await request('GET', '/api/restaurant/orders');
-  assert(anonToOrders.status === 401, 'Anonymous user blocked from /api/restaurant/orders (401)');
+  assert(anonToOrders.status === 401, 'Anonymous customer blocked from /api/restaurant/orders (401)');
+
+  const anonToSuperAdmin = await request('GET', '/api/super-admin/plans');
+  assert(anonToSuperAdmin.status === 401, 'Anonymous customer blocked from /api/super-admin/plans (401)');
 
   // ------------------------------------------------------------------
-  // 3. Multi-Tenant Isolation (Restaurant A vs Restaurant B)
+  // 3. Super Admin Platform Views (Dashboard, Restaurants, Analytics, Plans, Subscriptions)
   // ------------------------------------------------------------------
-  console.log('\n--- 3. Multi-Tenant Restaurant Isolation (Restaurant A vs Restaurant B) ---');
-  // Create Restaurant B via Super Admin
+  console.log('\n--- 3. Super Admin Platform Dashboard, Analytics, Plans & Subscriptions ---');
+  const saDashRes = await request('GET', '/api/super-admin/dashboard/stats', null, saToken);
+  assert(
+    saDashRes.status === 200 && saDashRes.body?.stats?.totalRestaurants >= 1,
+    'Super Admin views platform dashboard stats'
+  );
+
+  const saRestsRes = await request('GET', '/api/admin/restaurants', null, saToken);
+  assert(
+    saRestsRes.status === 200 && Array.isArray(saRestsRes.body?.restaurants),
+    'Super Admin views restaurants list'
+  );
+
+  const saAnalyticsRes = await request('GET', '/api/super-admin/analytics/orders?period=all', null, saToken);
+  assert(
+    saAnalyticsRes.status === 200 && saAnalyticsRes.body?.summary !== undefined,
+    'Super Admin views platform order analytics'
+  );
+
+  const saPlansRes = await request('GET', '/api/super-admin/plans', null, saToken);
+  assert(
+    saPlansRes.status === 200 && Array.isArray(saPlansRes.body?.plans) && saPlansRes.body.plans.length >= 3,
+    'Super Admin views subscription plans (Phase 11 preserved)'
+  );
+
+  const saSubsRes = await request('GET', '/api/super-admin/subscriptions', null, saToken);
+  assert(
+    saSubsRes.status === 200 && Array.isArray(saSubsRes.body?.subscriptions) && Boolean(saSubsRes.body?.summary),
+    'Super Admin views restaurant subscriptions & summary (Phase 11 preserved)'
+  );
+
+  // ------------------------------------------------------------------
+  // 4. Multi-Tenant Isolation (Restaurant A vs Restaurant B)
+  // ------------------------------------------------------------------
+  console.log('\n--- 4. Multi-Tenant Restaurant Isolation (Restaurant A vs Restaurant B) ---');
   const restBEmail = `restb_${Date.now()}@scanserve.com`;
   const createRestB = await request(
     'POST',
@@ -186,14 +250,29 @@ async function runPhase12Tests() {
   assert(ra2Login.status === 200 && Boolean(ra2Login.body?.token), 'Restaurant B Admin login succeeds');
   const ra2Token = ra2Login.body.token;
 
+  // Restaurant B views own subscription & generates QR
+  const ra2SubRes = await request('GET', '/api/restaurant/subscription', null, ra2Token);
+  assert(
+    ra2SubRes.status === 200 && ra2SubRes.body?.subscription?.restaurantId === restBId,
+    'Restaurant B views its own subscription (TRIAL on FREE plan)'
+  );
+
+  const ra2QrRes = await request('GET', '/api/restaurant/qr', null, ra2Token);
+  assert(
+    ra2QrRes.status === 200 &&
+      ra2QrRes.body?.data?.menuUrl?.endsWith(`/menu/${restBSlug}`) &&
+      ra2QrRes.body?.data?.qrDataUrl?.startsWith('data:image/png;base64,'),
+    'Restaurant B generates QR code pointing to /menu/:slug'
+  );
+
   // Create category & menu item in Restaurant B
-  const catBRes = await request('POST', '/api/categories', { name: 'Seafood Specials' }, ra2Token);
+  const catBRes = await request('POST', '/api/restaurant/categories', { name: 'Seafood Specials' }, ra2Token);
   assert(catBRes.status === 201, 'Restaurant B creates a category');
   const catBId = catBRes.body.category.id;
 
   const itemBRes = await request(
     'POST',
-    '/api/menu',
+    '/api/restaurant/menu-items',
     {
       name: 'Grilled Prawns',
       description: 'Fresh coastal prawns',
@@ -206,6 +285,39 @@ async function runPhase12Tests() {
   assert(itemBRes.status === 201, 'Restaurant B creates a menu item');
   const itemBId = itemBRes.body.menuItem.id;
 
+  // Test Cloudinary upload validation (invalid file type rejected with 400)
+  const boundary = '----ScanServeTestBoundary';
+  const multipartBody = [
+    `--${boundary}`,
+    'Content-Disposition: form-data; name="image"; filename="malicious.txt"',
+    'Content-Type: text/plain',
+    '',
+    'not an image',
+    `--${boundary}--`,
+    '',
+  ].join('\r\n');
+  const badUploadRes = await request(
+    'POST',
+    '/api/restaurant/menu-items/upload-image',
+    multipartBody,
+    ra2Token,
+    { 'Content-Type': `multipart/form-data; boundary=${boundary}` }
+  );
+  assert(
+    badUploadRes.status === 400 && badUploadRes.body?.message?.includes('Only JPEG, PNG, and WEBP'),
+    'Cloudinary upload endpoint rejects invalid file types with 400'
+  );
+
+  // Open public menu without authentication
+  const pubMenuB = await request('GET', `/api/public/menu/${restBSlug}`);
+  assert(
+    pubMenuB.status === 200 &&
+      pubMenuB.body?.data?.restaurant?.slug === restBSlug &&
+      pubMenuB.body?.data?.categories?.[0]?.items?.[0]?.id === itemBId &&
+      pubMenuB.body?.data?.restaurant?.whatsappNumber === undefined,
+    'Public menu loads without auth and exposes only safe public fields'
+  );
+
   // Place an order for Restaurant B
   const orderBRes = await request('POST', '/api/public/orders', {
     restaurantSlug: restBSlug,
@@ -215,6 +327,18 @@ async function runPhase12Tests() {
   });
   assert(orderBRes.status === 201, 'Customer places order at Restaurant B');
   const orderBId = orderBRes.body.order.id;
+  const orderBRef = orderBRes.body.order.orderId;
+
+  // Duplicate order protection test (same restaurant, same table, same items within 5s window)
+  const dupOrderBRes = await request('POST', '/api/public/orders', {
+    restaurantSlug: restBSlug,
+    tableNumber: 'B1',
+    items: [{ menuItemId: itemBId, quantity: 2 }],
+  });
+  assert(
+    dupOrderBRes.status === 201 && dupOrderBRes.body?.order?.id === orderBId,
+    'Duplicate order within 5s window is idempotently deduplicated (returns existing order without creating duplicate)'
+  );
 
   // Restaurant A tries to read/edit/delete Restaurant B's category
   const ra1EditCatB = await request('PUT', `/api/categories/${catBId}`, { name: 'Hacked' }, ra1Token);
@@ -257,16 +381,22 @@ async function runPhase12Tests() {
   );
   assert(ra1PatchOrderB.status === 404, 'Restaurant A cannot update Restaurant B order status (404)');
 
+  // Restaurant A tries to access Restaurant B stats or subscription
+  const ra1GetStatsB = await request('GET', `/api/super-admin/restaurants/${restBId}/stats`, null, ra1Token);
+  assert(ra1GetStatsB.status === 403, 'Restaurant A cannot view Restaurant B stats (403)');
+
+  const ra1GetSubB = await request('GET', `/api/super-admin/restaurants/${restBId}/subscription`, null, ra1Token);
+  assert(ra1GetSubB.status === 403, 'Restaurant A cannot view Restaurant B subscription (403)');
+
   // Verify Restaurant A's order list does NOT contain Restaurant B's order
   const ra1Orders = await request('GET', '/api/restaurant/orders', null, ra1Token);
   const leakedOrder = (ra1Orders.body?.orders || []).find((o) => o.id === orderBId);
   assert(!leakedOrder, 'Restaurant A order list does not leak Restaurant B orders');
 
   // ------------------------------------------------------------------
-  // 4. Customer Menu & Order Integrity / Price Tampering Prevention
+  // 5. Customer Order Validation & Price Integrity
   // ------------------------------------------------------------------
-  console.log('\n--- 4. Customer Order Validation & Price Integrity ---');
-  // Customer attempts to spoof price in payload (e.g. price: 0.01 when DB price is 450.00)
+  console.log('\n--- 5. Customer Order Validation & Price Integrity ---');
   const spoofOrderRes = await request('POST', '/api/public/orders', {
     restaurantSlug: restBSlug,
     tableNumber: 'B2',
@@ -280,7 +410,6 @@ async function runPhase12Tests() {
     'Backend calculates totalAmount strictly from DB price (2 * 450 = 900), ignoring client price'
   );
 
-  // Invalid quantities
   const zeroQtyOrder = await request('POST', '/api/public/orders', {
     restaurantSlug: restBSlug,
     tableNumber: 'B2',
@@ -309,7 +438,6 @@ async function runPhase12Tests() {
   });
   assert(emptyTableOrder.status === 400, 'Order with blank tableNumber rejected (400)');
 
-  // Cross-restaurant menu item injection in public order
   const restAMenu = await request('GET', '/api/public/menu/spice-garden');
   const restAItemId = restAMenu.body?.categories?.[0]?.items?.[0]?.id;
   if (restAItemId) {
@@ -321,7 +449,6 @@ async function runPhase12Tests() {
     assert(crossRestOrder.status === 400, 'Customer cannot order Restaurant A item under Restaurant B slug');
   }
 
-  // Unavailable item ordering rejected
   await request('PATCH', `/api/menu/${itemBId}/availability`, { isAvailable: false }, ra2Token);
   const unavailOrder = await request('POST', '/api/public/orders', {
     restaurantSlug: restBSlug,
@@ -332,9 +459,9 @@ async function runPhase12Tests() {
   await request('PATCH', `/api/menu/${itemBId}/availability`, { isAvailable: true }, ra2Token);
 
   // ------------------------------------------------------------------
-  // 5. Order Status Lifecycle & WhatsApp Non-Blocking Safety
+  // 6. Order Status Lifecycle, Customer Tracking & WhatsApp Link Generation
   // ------------------------------------------------------------------
-  console.log('\n--- 5. Order Status Transitions & WhatsApp Link Generation ---');
+  console.log('\n--- 6. Order Status Transitions, Customer Tracking & WhatsApp Link ---');
   const statusConfirm = await request(
     'PATCH',
     `/api/restaurant/orders/${orderBId}/status`,
@@ -359,6 +486,13 @@ async function runPhase12Tests() {
   );
   assert(statusReady.status === 200 && statusReady.body?.order?.status === 'READY', 'Order status transitions PREPARING -> READY');
 
+  // Verify customer public order tracking endpoint reflects READY status
+  const custTrackRes = await request('GET', `/api/public/orders/${orderBRef}/status`);
+  assert(
+    custTrackRes.status === 200 && custTrackRes.body?.data?.status === 'READY',
+    'Customer order tracking endpoint GET /api/public/orders/:orderRef/status returns live status'
+  );
+
   const statusComp = await request(
     'PATCH',
     `/api/restaurant/orders/${orderBId}/status`,
@@ -375,7 +509,6 @@ async function runPhase12Tests() {
   );
   assert(statusInvalid.status === 400, 'Invalid order status rejected with 400');
 
-  // Configure WhatsApp number on Restaurant B and verify wa.me link generation
   const updateProfileB = await request(
     'PUT',
     '/api/restaurant/profile',
@@ -399,12 +532,14 @@ async function runPhase12Tests() {
   );
 
   // ------------------------------------------------------------------
-  // 6. Socket.IO Real-Time Room Isolation & Security
+  // 7. Socket.IO Real-Time Room Isolation (Restaurant & Customer Rooms)
   // ------------------------------------------------------------------
-  console.log('\n--- 6. Socket.IO Real-Time Isolation & Auth ---');
+  console.log('\n--- 7. Socket.IO Real-Time Isolation (Restaurant & Customer Rooms) ---');
   await new Promise((resolve) => {
     let socketAEventReceived = false;
     let socketBEventReceived = false;
+    let customerStatusReceived = false;
+    let createdOrderInternalId = null;
 
     const socketA = io(BASE_URL, {
       auth: { token: ra1Token },
@@ -412,6 +547,9 @@ async function runPhase12Tests() {
     });
     const socketB = io(BASE_URL, {
       auth: { token: ra2Token },
+      transports: ['websocket'],
+    });
+    const customerSocket = io(BASE_URL, {
       transports: ['websocket'],
     });
 
@@ -423,29 +561,93 @@ async function runPhase12Tests() {
         socketBEventReceived = true;
       }
     });
+    customerSocket.on('order:status_updated', (payload) => {
+      if (payload?.status === 'ACCEPTED') {
+        customerStatusReceived = true;
+      }
+    });
 
     setTimeout(async () => {
-      // Trigger an order for Restaurant B
-      await request('POST', '/api/public/orders', {
+      const sockOrder = await request('POST', '/api/public/orders', {
         restaurantSlug: restBSlug,
         tableNumber: 'SOCK-1',
         items: [{ menuItemId: itemBId, quantity: 1 }],
+      });
+      createdOrderInternalId = sockOrder.body?.order?.id;
+      const publicOrderRef = sockOrder.body?.order?.orderId;
+
+      customerSocket.emit('order:subscribe', { orderToken: publicOrderRef }, async () => {
+        await request(
+          'PATCH',
+          `/api/restaurant/orders/${createdOrderInternalId}/status`,
+          { status: 'ACCEPTED' },
+          ra2Token
+        );
       });
 
       setTimeout(() => {
         assert(socketBEventReceived === true, 'Restaurant B socket receives new_order event for Restaurant B');
         assert(socketAEventReceived === false, 'Restaurant A socket does NOT receive Restaurant B new_order event');
+        assert(customerStatusReceived === true, 'Customer socket receives order:status_updated event for their order');
         socketA.disconnect();
         socketB.disconnect();
+        customerSocket.disconnect();
         resolve();
-      }, 400);
+      }, 500);
     }, 400);
   });
 
   // ------------------------------------------------------------------
-  // 7. Inactive Restaurant Admin Login & Public Ordering Block
+  // 8. Expired Subscription Enforcement (Login/Logout Allowed, Ordering Blocked)
   // ------------------------------------------------------------------
-  console.log('\n--- 7. Inactive Restaurant Enforcement ---');
+  console.log('\n--- 8. Expired Subscription Enforcement (Phase 11 + Phase 12 Section 12) ---');
+  const pastDate = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+  await request(
+    'PATCH',
+    `/api/super-admin/restaurants/${restBId}/subscription`,
+    { status: 'EXPIRED', endDate: pastDate },
+    saToken
+  );
+
+  // Login and viewing own subscription must STILL work for an expired restaurant!
+  const expiredRaLogin = await request('POST', '/api/auth/login', {
+    email: restBEmail,
+    password: 'Password123!',
+  });
+  assert(
+    expiredRaLogin.status === 200 && Boolean(expiredRaLogin.body?.token),
+    'Restaurant Admin with EXPIRED subscription can still login cleanly'
+  );
+
+  const expiredRaSubView = await request('GET', '/api/restaurant/subscription', null, expiredRaLogin.body.token);
+  assert(
+    expiredRaSubView.status === 200 && expiredRaSubView.body?.subscription?.status === 'EXPIRED',
+    'Restaurant Admin with EXPIRED subscription can view /api/restaurant/subscription'
+  );
+
+  const expiredPublicOrder = await request('POST', '/api/public/orders', {
+    restaurantSlug: restBSlug,
+    tableNumber: 'EXP-1',
+    items: [{ menuItemId: itemBId, quantity: 1 }],
+  });
+  assert(
+    expiredPublicOrder.status === 403,
+    'Public order creation is blocked (403) when restaurant subscription is EXPIRED'
+  );
+
+  // Restore Restaurant B subscription to ACTIVE
+  const futureDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  await request(
+    'PATCH',
+    `/api/super-admin/restaurants/${restBId}/subscription`,
+    { status: 'ACTIVE', endDate: futureDate },
+    saToken
+  );
+
+  // ------------------------------------------------------------------
+  // 9. Inactive Restaurant Admin Login & Public Ordering Block
+  // ------------------------------------------------------------------
+  console.log('\n--- 9. Inactive Restaurant Enforcement ---');
   const deactivateB = await request(
     'PATCH',
     `/api/admin/restaurants/${restBId}/status`,
@@ -477,9 +679,9 @@ async function runPhase12Tests() {
   await request('PATCH', `/api/admin/restaurants/${restBId}/status`, { status: 'ACTIVE' }, saToken);
 
   // ------------------------------------------------------------------
-  // 8. Error Handling & Malformed JSON Safety
+  // 10. Error Handling & Malformed JSON Safety
   // ------------------------------------------------------------------
-  console.log('\n--- 8. Error Handling & Malformed Payloads ---');
+  console.log('\n--- 10. Error Handling & Malformed Payloads ---');
   const malformedRes = await request('POST', '/api/auth/login', '{bad_json:', null);
   assert(malformedRes.status === 400 && malformedRes.body?.success === false, 'Malformed JSON body returns clean 400 JSON error without crashing');
 

@@ -252,12 +252,13 @@ class _SuperAdminSubscriptionsScreenState
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
+                    Material(
+                      color: AppColors.surface,
+                      shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.border),
+                        side: const BorderSide(color: AppColors.border),
                       ),
+                      clipBehavior: Clip.antiAlias,
                       child: Column(
                         children: [
                           for (int i = 0; i < data.subscriptions.length; i++) ...[

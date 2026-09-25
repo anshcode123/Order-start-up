@@ -37,53 +37,56 @@ class SuperAdminPlansScreen extends ConsumerWidget {
               content: SizedBox(
                 width: 440,
                 child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
-                        controller: nameCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Plan Name (e.g. FREE, BASIC, PRO)',
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextField(
+                          controller: nameCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Plan Name (e.g. FREE, BASIC, PRO)',
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: priceCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Monthly Price (₹)',
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: priceCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Monthly Price (₹)',
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: maxCatCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Max Categories (leave empty for Unlimited)',
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: maxCatCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Max Categories (leave empty for Unlimited)',
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: maxItemsCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Max Menu Items (leave empty for Unlimited)',
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: maxItemsCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Max Menu Items (leave empty for Unlimited)',
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('WhatsApp Notifications Enabled'),
-                        value: whatsappEnabled,
-                        onChanged: (v) => setDialogState(() => whatsappEnabled = v),
-                      ),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Analytics Enabled'),
-                        value: analyticsEnabled,
-                        onChanged: (v) => setDialogState(() => analyticsEnabled = v),
-                      ),
-                    ],
+                        const SizedBox(height: 12),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('WhatsApp Notifications Enabled'),
+                          value: whatsappEnabled,
+                          onChanged: (v) => setDialogState(() => whatsappEnabled = v),
+                        ),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Analytics Enabled'),
+                          value: analyticsEnabled,
+                          onChanged: (v) => setDialogState(() => analyticsEnabled = v),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -160,7 +163,6 @@ class SuperAdminPlansScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final plansAsync = ref.watch(subscriptionPlansProvider);
-    final isMobile = Responsive.isMobile(context);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -172,21 +174,22 @@ class SuperAdminPlansScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Wrap(
+                spacing: 16,
+                runSpacing: 12,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Subscription Plans', style: AppTextStyles.displayMedium),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Configure SaaS tiers, menu limits, and feature entitlements',
-                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
-                        ),
-                      ],
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Subscription Plans', style: AppTextStyles.displayMedium),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Configure SaaS tiers, menu limits, and feature entitlements',
+                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+                      ),
+                    ],
                   ),
                   AppPrimaryButton(
                     label: 'Create Plan',
@@ -204,78 +207,94 @@ class SuperAdminPlansScreen extends ConsumerWidget {
                   apiErrorMessage(error),
                   style: AppTextStyles.body.copyWith(color: AppColors.error),
                 ),
-                data: (plans) => GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: isMobile ? 1 : 3,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    childAspectRatio: isMobile ? 1.35 : 1.15,
-                  ),
-                  itemCount: plans.length,
-                  itemBuilder: (context, index) {
-                    final plan = plans[index];
-                    return Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(plan.name, style: AppTextStyles.title.copyWith(fontSize: 18)),
-                              StatusBadge(isActive: plan.isActive),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '₹${plan.priceMonthly} / month',
-                            style: AppTextStyles.displayMedium.copyWith(
-                              fontSize: 22,
-                              color: AppColors.primaryDark,
+                data: (plans) => LayoutBuilder(
+                  builder: (context, constraints) {
+                    final maxWidth = constraints.maxWidth;
+                    final int columns = maxWidth < 600 ? 1 : (maxWidth < 960 ? 2 : 3);
+                    const double spacing = 16;
+                    final double cardWidth =
+                        columns == 1 ? maxWidth : (maxWidth - spacing * (columns - 1)) / columns;
+
+                    return Wrap(
+                      spacing: spacing,
+                      runSpacing: spacing,
+                      children: [
+                        for (final plan in plans)
+                          SizedBox(
+                            width: cardWidth,
+                            child: Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                color: AppColors.surface,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: AppColors.border),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          plan.name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: AppTextStyles.title.copyWith(fontSize: 18),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      StatusBadge(isActive: plan.isActive),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    '₹${plan.priceMonthly} / month',
+                                    style: AppTextStyles.displayMedium.copyWith(
+                                      fontSize: 22,
+                                      color: AppColors.primaryDark,
+                                    ),
+                                  ),
+                                  const Divider(height: 24),
+                                  _FeatureRow(
+                                    label: 'Max Categories',
+                                    value: plan.maxCategories?.toString() ?? 'Unlimited',
+                                  ),
+                                  _FeatureRow(
+                                    label: 'Max Menu Items',
+                                    value: plan.maxMenuItems?.toString() ?? 'Unlimited',
+                                  ),
+                                  _FeatureRow(
+                                    label: 'WhatsApp Orders',
+                                    value: plan.whatsappEnabled ? 'Included' : 'Disabled',
+                                  ),
+                                  _FeatureRow(
+                                    label: 'Analytics',
+                                    value: plan.analyticsEnabled ? 'Included' : 'Basic',
+                                  ),
+                                  const SizedBox(height: 20),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: AppOutlinedButton(
+                                          label: 'Edit',
+                                          onPressed: () =>
+                                              _showPlanDialog(context, ref, existing: plan),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      TextButton(
+                                        onPressed: () => _toggleStatus(context, ref, plan),
+                                        child: Text(plan.isActive ? 'Deactivate' : 'Activate'),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                          const Divider(height: 24),
-                          _FeatureRow(
-                            label: 'Max Categories',
-                            value: plan.maxCategories?.toString() ?? 'Unlimited',
-                          ),
-                          _FeatureRow(
-                            label: 'Max Menu Items',
-                            value: plan.maxMenuItems?.toString() ?? 'Unlimited',
-                          ),
-                          _FeatureRow(
-                            label: 'WhatsApp Orders',
-                            value: plan.whatsappEnabled ? 'Included' : 'Disabled',
-                          ),
-                          _FeatureRow(
-                            label: 'Analytics',
-                            value: plan.analyticsEnabled ? 'Included' : 'Basic',
-                          ),
-                          const Spacer(),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: AppOutlinedButton(
-                                  label: 'Edit',
-                                  onPressed: () => _showPlanDialog(context, ref, existing: plan),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              TextButton(
-                                onPressed: () => _toggleStatus(context, ref, plan),
-                                child: Text(plan.isActive ? 'Deactivate' : 'Activate'),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                      ],
                     );
                   },
                 ),

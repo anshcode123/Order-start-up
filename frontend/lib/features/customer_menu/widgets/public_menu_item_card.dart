@@ -55,48 +55,66 @@ class PublicMenuItemCard extends ConsumerWidget {
                   )
                 : _placeholder(),
           ),
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item.name, style: AppTextStyles.title.copyWith(fontSize: 16)),
-                if (item.description.isNotEmpty) ...[
-                  const SizedBox(height: 4),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    item.description,
-                    style: AppTextStyles.bodySmall,
-                    maxLines: 2,
+                    item.name,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.title.copyWith(fontSize: 15),
+                  ),
+                  if (item.description.isNotEmpty)
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          item.description,
+                          style: AppTextStyles.bodySmall,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                  else
+                    const Spacer(),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          item.formattedPrice,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.title.copyWith(
+                            color: AppColors.primaryDark,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ),
+                      if (quantity == 0)
+                        FilledButton(
+                          onPressed: () => _add(context, ref),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                            minimumSize: const Size(0, 32),
+                          ),
+                          child: const Text('Add'),
+                        )
+                      else
+                        _QuantityStepper(
+                          quantity: quantity,
+                          onIncrement: () => ref.read(cartProvider.notifier).incrementItem(item.id),
+                          onDecrement: () => ref.read(cartProvider.notifier).decrementItem(item.id),
+                        ),
+                    ],
                   ),
                 ],
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        item.formattedPrice,
-                        style: AppTextStyles.title.copyWith(color: AppColors.primaryDark, fontSize: 16),
-                      ),
-                    ),
-                    if (quantity == 0)
-                      FilledButton(
-                        onPressed: () => _add(context, ref),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        ),
-                        child: const Text('Add'),
-                      )
-                    else
-                      _QuantityStepper(
-                        quantity: quantity,
-                        onIncrement: () => ref.read(cartProvider.notifier).incrementItem(item.id),
-                        onDecrement: () => ref.read(cartProvider.notifier).decrementItem(item.id),
-                      ),
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
         ],

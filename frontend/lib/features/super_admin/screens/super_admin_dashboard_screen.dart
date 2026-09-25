@@ -215,12 +215,13 @@ class SuperAdminDashboardScreen extends ConsumerWidget {
                         ),
                       )
                     else
-                      Container(
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
+                      Material(
+                        color: AppColors.surface,
+                        shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.border),
+                          side: const BorderSide(color: AppColors.border),
                         ),
+                        clipBehavior: Clip.antiAlias,
                         child: Column(
                           children: [
                             for (int i = 0;

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scanserve/core/network/token_storage.dart';
 
 /// Base URL for the ScanServe API.
+/// Configurable at build time via:
+/// flutter build web --dart-define=API_BASE_URL=https://api.yourdomain.com/api
 const String kApiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
   defaultValue: 'http://localhost:5000/api',
@@ -33,10 +35,19 @@ final dioProvider = Provider<Dio>((ref) {
     InterceptorsWrapper(
       onRequest: (options, handler) {
         final token = tokenStorage.token;
-        if (token != null) {
+        if (token != null && token.isNotEmpty) {
           options.headers['Authorization'] = 'Bearer $token';
         }
         handler.next(options);
+      },
+      onError: (DioException error, handler) async {
+        // If a stored JWT expired or was invalidated mid-session (excluding login attempts),
+        // clear the stale token from storage so subsequent checks know it's invalid.
+        if (error.response?.statusCode == 401 &&
+            !error.requestOptions.path.contains('/auth/login')) {
+          await tokenStorage.clear();
+        }
+        handler.next(error);
       },
     ),
   );
