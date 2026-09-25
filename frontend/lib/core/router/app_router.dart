@@ -17,6 +17,7 @@ import 'package:scanserve/features/restaurant_admin/screens/order_detail_screen.
 import 'package:scanserve/features/restaurant_admin/screens/orders_screen.dart';
 import 'package:scanserve/features/restaurant_admin/screens/restaurant_admin_dashboard_screen.dart';
 import 'package:scanserve/features/restaurant_admin/screens/restaurant_admin_qr_screen.dart';
+import 'package:scanserve/features/restaurant_admin/screens/restaurant_admin_subscription_screen.dart';
 import 'package:scanserve/features/restaurant_admin/screens/settings_screen.dart';
 import 'package:scanserve/features/restaurant_admin/widgets/restaurant_admin_scaffold.dart';
 import 'package:scanserve/features/super_admin/screens/restaurant_create_screen.dart';
@@ -25,6 +26,8 @@ import 'package:scanserve/features/super_admin/screens/restaurant_qr_screen.dart
 import 'package:scanserve/features/super_admin/screens/restaurants_list_screen.dart';
 import 'package:scanserve/features/super_admin/screens/super_admin_analytics_screen.dart';
 import 'package:scanserve/features/super_admin/screens/super_admin_dashboard_screen.dart';
+import 'package:scanserve/features/super_admin/screens/super_admin_plans_screen.dart';
+import 'package:scanserve/features/super_admin/screens/super_admin_subscriptions_screen.dart';
 import 'package:scanserve/features/super_admin/widgets/super_admin_scaffold.dart';
 
 /// Notifies GoRouter when authState changes without disposing/re-creating the GoRouter instance.
@@ -67,9 +70,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'login',
         builder: (context, state) => const LoginScreen(),
       ),
-      // Customer-facing (Phase 5 & 6) - deliberately outside both admin
-      // ShellRoutes: no admin nav chrome, and _redirect below never
-      // treats these as protected, so they work with no auth at all.
       GoRoute(
         path: AppRoutes.customerMenuTemplate,
         name: 'customer-menu',
@@ -144,6 +144,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const RestaurantAdminQrScreen(),
           ),
           GoRoute(
+            path: AppRoutes.dashboardSubscription,
+            name: 'dashboard-subscription',
+            builder: (context, state) =>
+                const RestaurantAdminSubscriptionScreen(),
+          ),
+          GoRoute(
             path: AppRoutes.dashboardSettings,
             name: 'dashboard-settings',
             builder: (context, state) => const RestaurantAdminSettingsScreen(),
@@ -162,6 +168,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.superAdminAnalytics,
             name: 'super-admin-analytics',
             builder: (context, state) => const SuperAdminAnalyticsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.superAdminPlans,
+            name: 'super-admin-plans',
+            builder: (context, state) => const SuperAdminPlansScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.superAdminSubscriptions,
+            name: 'super-admin-subscriptions',
+            builder: (context, state) => const SuperAdminSubscriptionsScreen(),
           ),
           GoRoute(
             path: AppRoutes.superAdminRestaurants,
@@ -194,8 +210,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 });
 
 String? _redirect(AuthState authState, String location) {
-  // Still checking for a stored token - don't redirect yet, otherwise
-  // every fresh page load would briefly bounce through /login.
   if (authState.status == AuthStatus.unknown) return null;
 
   final isLoggedIn = authState.status == AuthStatus.authenticated;
@@ -214,7 +228,6 @@ String? _redirect(AuthState authState, String location) {
       location == AppRoutes.login || location == AppRoutes.landing;
   if (goingToPublicOnlyRoute) return homeForRole;
 
-  // Keep each role inside their own section.
   if (user.isSuperAdmin && location.startsWith('/dashboard')) {
     return AppRoutes.superAdminDashboard;
   }

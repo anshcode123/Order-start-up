@@ -5,10 +5,26 @@ const { generateMenuQrDataUrl, buildMenuUrl } = require('../services/qrService')
 
 const MIN_PASSWORD_LENGTH = 8;
 
+function normalizeCreatePayload(body) {
+  const restaurant = body.restaurant || {
+    name: body.name,
+    description: body.description,
+    phone: body.phone,
+    email: body.email,
+    address: body.address,
+    whatsappNumber: body.whatsappNumber,
+  };
+  const admin = body.admin || {
+    name: body.adminName,
+    email: body.adminEmail,
+    password: body.adminPassword,
+  };
+  return { restaurant, admin };
+}
+
 function validateCreatePayload(body) {
   const errors = [];
-  const restaurant = body.restaurant || {};
-  const admin = body.admin || {};
+  const { restaurant, admin } = normalizeCreatePayload(body);
 
   if (!restaurant.name || !restaurant.name.trim()) {
     errors.push('Restaurant name is required');
@@ -38,7 +54,7 @@ async function createRestaurant(req, res, next) {
       return res.status(400).json({ success: false, message: errors[0], errors });
     }
 
-    const { restaurant: restaurantData, admin: adminData } = req.body;
+    const { restaurant: restaurantData, admin: adminData } = normalizeCreatePayload(req.body);
 
     const existingAdmin = await prisma.user.findUnique({
       where: { email: adminData.email.toLowerCase() },

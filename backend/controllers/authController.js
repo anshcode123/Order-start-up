@@ -2,7 +2,6 @@ const bcrypt = require('bcrypt');
 const prisma = require('../lib/prisma');
 const { signToken } = require('../utils/token');
 
-// POST /api/auth/login
 async function login(req, res, next) {
   try {
     const { email, password } = req.body;
@@ -13,8 +12,6 @@ async function login(req, res, next) {
 
     const user = await prisma.user.findUnique({ where: { email: String(email).toLowerCase() } });
 
-    // Same generic message whether the email doesn't exist or the
-    // password is wrong, so login can't be used to enumerate accounts.
     if (!user || !user.isActive) {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
@@ -22,6 +19,16 @@ async function login(req, res, next) {
     const passwordMatches = await bcrypt.compare(password, user.password);
     if (!passwordMatches) {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
+    }
+
+    if (user.role === 'RESTAURANT_ADMIN' && user.restaurantId) {
+      const restaurant = await prisma.restaurant.findUnique({ where: { id: user.restaurantId } });
+      if (!restaurant || !restaurant.isActive) {
+        return res.status(403).json({
+          success: false,
+          message: 'Your restaurant account is currently inactive. Please contact support.',
+        });
+      }
     }
 
     const token = signToken({ id: user.id, role: user.role, restaurant: user.restaurantId });
@@ -35,6 +42,7 @@ async function login(req, res, next) {
         email: user.email,
         role: user.role,
         restaurant: user.restaurantId,
+        restaurantId: user.restaurantId,
       },
     });
   } catch (err) {
@@ -42,10 +50,6 @@ async function login(req, res, next) {
   }
 }
 
-// GET /api/auth/me
-// Returns the logged-in user's profile. For a RESTAURANT_ADMIN this also
-// includes their restaurant's name - this is what both dashboards read
-// from, so there's no separate "restaurant admin dashboard" endpoint.
 async function me(req, res, next) {
   try {
     const responseUser = {
@@ -54,6 +58,7 @@ async function me(req, res, next) {
       email: req.user.email,
       role: req.user.role,
       restaurant: null,
+      restaurantId: req.user.restaurantId || null,
     };
 
     if (req.user.role === 'RESTAURANT_ADMIN' && req.user.restaurant) {
@@ -62,8 +67,6 @@ async function me(req, res, next) {
         responseUser.restaurant = {
           id: restaurant.id,
           name: restaurant.name,
-          slug: restaurant.slug,
-          isActive: restaurant.isActive,
         };
       }
     }
@@ -74,4 +77,11 @@ async function me(req, res, next) {
   }
 }
 
-module.exports = { login, me };
+async function logout(req, res) {
+  res.status(200).json({
+    success: true,
+    message: 'Logged out successfully',
+  });
+}
+
+module.exports = { login, me, logout };

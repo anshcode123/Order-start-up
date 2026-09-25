@@ -8,10 +8,6 @@ import 'package:scanserve/core/utils/responsive.dart';
 import 'package:scanserve/features/auth/providers/auth_provider.dart';
 import 'package:scanserve/shared/widgets/app_logo.dart';
 
-/// Nav shown on every Super Admin page: Dashboard, Restaurants,
-/// Create Restaurant, Logout. Per Phase 3 spec this does NOT show
-/// restaurant-specific menu/order pages - those don't exist for a
-/// Super Admin.
 class SuperAdminScaffold extends ConsumerWidget {
   const SuperAdminScaffold({super.key, required this.child});
 
@@ -27,6 +23,16 @@ class SuperAdminScaffold extends ConsumerWidget {
       label: 'Analytics',
       icon: Icons.insights_outlined,
       route: AppRoutes.superAdminAnalytics
+    ),
+    (
+      label: 'Plans',
+      icon: Icons.layers_outlined,
+      route: AppRoutes.superAdminPlans
+    ),
+    (
+      label: 'Subscriptions',
+      icon: Icons.card_membership_outlined,
+      route: AppRoutes.superAdminSubscriptions
     ),
     (
       label: 'Restaurants',

@@ -11,16 +11,6 @@ import 'package:scanserve/features/restaurant_admin/providers/order_providers.da
 import 'package:scanserve/features/restaurant_admin/providers/restaurant_order_socket_provider.dart';
 import 'package:scanserve/shared/widgets/app_logo.dart';
 
-/// Nav shown on every Restaurant Admin page: Dashboard, Orders, Menu,
-/// Categories, QR, Settings, Logout. WhatsApp is intentionally not here
-/// yet - a later phase.
-///
-/// Also where the Phase 7 order socket lives for the whole "/dashboard/*"
-/// session: watching restaurantOrderSocketProvider here (rather than
-/// only on the Orders screen) means the connection - and the "New order
-/// received" notification - stays live even while the admin is on the
-/// Menu or Settings tab, not just when Orders happens to be open
-/// (Phase 7 spec #21).
 class RestaurantAdminScaffold extends ConsumerWidget {
   const RestaurantAdminScaffold({super.key, required this.child});
 
@@ -32,6 +22,7 @@ class RestaurantAdminScaffold extends ConsumerWidget {
     (label: 'Menu', icon: Icons.restaurant_menu_outlined, route: AppRoutes.dashboardMenu),
     (label: 'Categories', icon: Icons.category_outlined, route: AppRoutes.dashboardCategories),
     (label: 'QR', icon: Icons.qr_code_2_rounded, route: AppRoutes.dashboardQr),
+    (label: 'Subscription', icon: Icons.card_membership_outlined, route: AppRoutes.dashboardSubscription),
     (label: 'Settings', icon: Icons.settings_outlined, route: AppRoutes.dashboardSettings),
   ];
 
@@ -41,8 +32,6 @@ class RestaurantAdminScaffold extends ConsumerWidget {
     final currentLocation = GoRouterState.of(context).matchedLocation;
     final connectionStatus = ref.watch(restaurantOrderSocketProvider);
 
-    // In-app "New order received" notification (Phase 7 spec #21) -
-    // fires from anywhere in the admin shell, not just the Orders tab.
     ref.listen(newOrderEventProvider, (previous, next) {
       if (next == null) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -98,8 +87,6 @@ class _SideNav extends ConsumerWidget {
   final bool isDrawer;
 
   bool _isSelected(String route) {
-    // Exact match for the plain dashboard route so it doesn't also
-    // light up while on nested menu screens (create/edit).
     if (route == AppRoutes.dashboard) return currentLocation == route;
     return currentLocation.startsWith(route);
   }
@@ -150,9 +137,6 @@ class _SideNav extends ConsumerWidget {
   }
 }
 
-/// Small live/offline indicator - deliberately subtle (a dot, not a
-/// banner) since a brief disconnect/reconnect is expected and normal
-/// (Phase 7 spec #14), not something that should alarm the admin.
 class _ConnectionDot extends StatelessWidget {
   const _ConnectionDot({required this.status});
 

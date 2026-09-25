@@ -1,6 +1,4 @@
 // ScanServe database schema - PostgreSQL via Prisma.
-// Replaces the Phase 3 Mongoose models (models/User.js, models/Restaurant.js),
-// which have been removed.
 
 generator client {
   provider = "prisma-client-js"
@@ -16,7 +14,6 @@ enum Role {
   RESTAURANT_ADMIN
 }
 
-// --- Phase 6: Ordering ---
 enum OrderStatus {
   PENDING
   ACCEPTED
@@ -27,24 +24,38 @@ enum OrderStatus {
   REJECTED
 }
 
-model Restaurant {
-  id          String   @id @default(uuid())
-  name        String
-  slug        String   @unique
-  description String   @default("")
-  phone       String   @default("")
-  email       String   @default("")
-  address     String   @default("")
-  whatsappNumber String @default("") @map("whatsapp_number")
-  logoUrl     String?  @map("logo_url")
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+enum BillingInterval {
+  MONTHLY
+  YEARLY
+}
 
-  admins     User[]
-  categories Category[]
-  menuItems  MenuItem[]
-  orders     Order[]
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  SUSPENDED
+}
+
+model Restaurant {
+  id             String   @id @default(uuid())
+  name           String
+  slug           String   @unique
+  description    String   @default("")
+  phone          String   @default("")
+  email          String   @default("")
+  address        String   @default("")
+  whatsappNumber String   @default("") @map("whatsapp_number")
+  logoUrl        String?  @map("logo_url")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  admins       User[]
+  categories   Category[]
+  menuItems    MenuItem[]
+  orders       Order[]
+  subscription Subscription?
 
   @@map("restaurants")
 }
@@ -59,83 +70,52 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // Only set for RESTAURANT_ADMIN; null for SUPER_ADMIN. Prisma/Postgres
-  // can't express "required only when role = X" declaratively the way
-  // the old Mongoose pre-validate hook did - that invariant is now
-  // enforced in application code (see services/restaurantService.js and
-  // scripts/seedSuperAdmin.js, the only two places that create a User).
   restaurantId String?     @map("restaurant_id")
   restaurant   Restaurant? @relation(fields: [restaurantId], references: [id])
 
+  @@index([restaurantId])
+  @@index([role])
   @@map("users")
 }
 
-// --- Phase 4: Restaurant menu management ---
-
 model Category {
-  id           String   @id @default(uuid())
-  restaurantId String   @map("restaurant_id")
-  // NOTE: this Cascade is dormant in practice - restaurants are never
-  // hard-deleted by the app (soft ACTIVE/INACTIVE only, per Phase 3).
-  // If that ever changes, deleting a Restaurant with menu items could
-  // race against MenuItem's Restrict-on-Category constraint below,
-  // depending on Postgres's cascade ordering. Revisit before adding any
-  // real "delete restaurant" endpoint.
+  id           String     @id @default(uuid())
+  restaurantId String     @map("restaurant_id")
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   name         String
-  description  String   @default("")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  description  String     @default("")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
 
   menuItems MenuItem[]
 
-  // Same category name is fine across different restaurants, but not
-  // twice within the same restaurant (Phase 4 spec #2).
   @@unique([restaurantId, name])
   @@index([restaurantId])
   @@map("categories")
 }
 
 model MenuItem {
-  id           String   @id @default(uuid())
+  id           String     @id @default(uuid())
   restaurantId String     @map("restaurant_id")
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   categoryId   String     @map("category_id")
-  // Restrict (not Cascade): a category with menu items can't be deleted
-  // at the DB level either - defense in depth alongside the application-
-  // level check in controllers/categoryController.js.
   category     Category   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   name         String
-  description  String   @default("")
-  // Money as Decimal, never Float - avoids binary floating-point
-  // rounding errors on prices (Phase 4 spec #10).
-  price        Decimal  @db.Decimal(10, 2)
-  imageUrl     String?  @map("image_url")
-  isAvailable  Boolean  @default(true) @map("is_available")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  description  String     @default("")
+  price        Decimal    @db.Decimal(10, 2)
+  imageUrl     String?    @map("image_url")
+  isAvailable  Boolean    @default(true) @map("is_available")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
 
-  // Phase 6: an order line snapshots itemName/unitPrice/subtotal at the
-  // time of order, and this FK is nullable with onDelete: SetNull (see
-  // OrderItem below) - deleting a menu item later never deletes or
-  // corrupts historical orders. This is the "future Orders phase" this
-  // note used to warn about.
   orderItems OrderItem[]
 
   @@index([restaurantId])
   @@index([categoryId])
+  @@index([restaurantId, isAvailable])
   @@map("menu_items")
 }
 
-// --- Phase 6: Ordering ---
-// Customers are anonymous - the only customer-provided identifier is
-// tableNumber (a String; "A12", "12B", "VIP-1" must all be valid, so it
-// is never an Int). publicToken is a separate, securely-random
-// identifier used for the customer-facing status lookup
-// (GET /api/public/orders/:orderRef/status) - the internal `id` (a
-// sequential-feeling UUID is still technically unguessable, but
-// publicToken exists so this route's security doesn't depend on that
-// assumption) is never exposed to the public endpoints.
 model Order {
   id           String      @id @default(uuid())
   restaurantId String      @map("restaurant_id")
@@ -151,14 +131,10 @@ model Order {
 
   @@index([restaurantId])
   @@index([restaurantId, status])
+  @@index([restaurantId, createdAt])
   @@map("orders")
 }
 
-// Snapshots itemName/unitPrice/subtotal at order time - an order must
-// keep showing what the customer actually paid even if the restaurant
-// later edits or deletes that MenuItem (Phase 6 spec: "IMPORTANT ORDER
-// ITEM SNAPSHOT"). menuItemId is only a best-effort reference back to
-// the still-existing item, if any - never the source of truth.
 model OrderItem {
   id         String    @id @default(uuid())
   orderId    String    @map("order_id")
@@ -174,4 +150,41 @@ model OrderItem {
   @@index([orderId])
   @@index([menuItemId])
   @@map("order_items")
+}
+
+model SubscriptionPlan {
+  id                   String          @id @default(uuid())
+  name                 String          @unique
+  description          String          @default("")
+  price                Decimal         @db.Decimal(10, 2)
+  billingInterval      BillingInterval @default(MONTHLY) @map("billing_interval")
+  maxMenuItems         Int?            @map("max_menu_items")
+  maxCategories        Int?            @map("max_categories")
+  maxOrdersPerMonth    Int?            @map("max_orders_per_month")
+  isActive             Boolean         @default(true) @map("is_active")
+  createdAt            DateTime        @default(now()) @map("created_at")
+  updatedAt            DateTime        @updatedAt @map("updated_at")
+
+  subscriptions        Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id             String             @id @default(uuid())
+  restaurantId   String             @unique @map("restaurant_id")
+  restaurant     Restaurant         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  planId         String             @map("plan_id")
+  plan           SubscriptionPlan   @relation(fields: [planId], references: [id])
+  status         SubscriptionStatus @default(TRIAL)
+  startDate      DateTime?          @map("start_date")
+  endDate        DateTime?          @map("end_date")
+  trialStartDate DateTime?          @map("trial_start_date")
+  trialEndDate   DateTime?          @map("trial_end_date")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  @@index([restaurantId])
+  @@index([status])
+  @@map("subscriptions")
 }

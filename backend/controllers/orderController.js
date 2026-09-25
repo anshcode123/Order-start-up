@@ -16,21 +16,19 @@ function serializeOrder(order) {
     status: order.status,
     items: order.items ? order.items.map(serializeOrderItem) : [],
     total: order.totalAmount ? order.totalAmount.toString() : '0',
+    totalAmount: order.totalAmount ? order.totalAmount.toString() : '0',
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
   };
 }
 
-// GET /api/restaurant/orders
-// Optional ?status=PENDING filter and ?search= query.
-// Always scoped to the caller's own restaurant via req.user.restaurantId.
 async function getOrders(req, res, next) {
   try {
     const { status, search } = req.query;
 
     const where = { restaurantId: req.user.restaurantId };
     if (status && status.toUpperCase() !== 'ALL') {
-      const upper = status.toUpperCase();
+      const upper = status.toUpperCase() === 'CONFIRMED' ? 'ACCEPTED' : status.toUpperCase();
       if (!ORDER_STATUSES.includes(upper)) {
         return res.status(400).json({
           success: false,
@@ -56,18 +54,18 @@ async function getOrders(req, res, next) {
       orderBy: { createdAt: 'desc' },
     });
 
+    const serialized = orders.map(serializeOrder);
     res.status(200).json({
       success: true,
       message: 'Orders fetched successfully',
-      data: orders.map(serializeOrder),
+      data: serialized,
+      orders: serialized,
     });
   } catch (err) {
     next(err);
   }
 }
 
-
-// GET /api/restaurant/orders/:id
 async function getOrderById(req, res, next) {
   try {
     const order = await prisma.order.findUnique({
@@ -75,29 +73,28 @@ async function getOrderById(req, res, next) {
       include: { items: true },
     });
 
-    // Same 404 whether the order doesn't exist or belongs to a
-    // different restaurant - never confirm another restaurant's order
-    // id is valid (Phase 6 spec #21).
     if (!order || order.restaurantId !== req.user.restaurantId) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
+    const serialized = serializeOrder(order);
     res.status(200).json({
       success: true,
       message: 'Order fetched successfully',
-      data: serializeOrder(order),
+      data: serialized,
+      order: serialized,
     });
   } catch (err) {
     next(err);
   }
 }
 
-// PATCH /api/restaurant/orders/:id/status
 async function updateOrderStatus(req, res, next) {
   try {
-    const { status: nextStatus } = req.body;
+    const rawStatus = req.body.status;
+    const requestedNormalized = rawStatus === 'CONFIRMED' ? 'ACCEPTED' : rawStatus;
 
-    if (!ORDER_STATUSES.includes(nextStatus)) {
+    if (!ORDER_STATUSES.includes(requestedNormalized)) {
       return res.status(400).json({
         success: false,
         message: `status must be one of: ${ORDER_STATUSES.join(', ')}`,
@@ -109,25 +106,19 @@ async function updateOrderStatus(req, res, next) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    if (!isValidTransition(order.status, nextStatus)) {
+    if (!isValidTransition(order.status, requestedNormalized)) {
       return res.status(400).json({
         success: false,
-        message: `Cannot change status from ${order.status} to ${nextStatus}`,
+        message: `Cannot change status from ${order.status} to ${rawStatus}`,
       });
     }
 
     const updated = await prisma.order.update({
       where: { id: order.id },
-      data: { status: nextStatus },
+      data: { status: requestedNormalized },
       include: { items: true, restaurant: { select: { name: true } } },
     });
 
-    // Emit ONLY after the DB write succeeds (Phase 7 spec #9, #17).
-    // Restaurant dashboard gets an admin-shaped payload (real internal
-    // id is fine - it's already authenticated and scoped to its own
-    // restaurant); the customer's order room gets the same public shape
-    // the REST status endpoint returns, so the Flutter side can reuse
-    // one model for both.
     emitToRestaurant(updated.restaurantId, 'order:status_updated', {
       orderId: updated.id,
       publicOrderReference: updated.publicToken,
@@ -145,10 +136,16 @@ async function updateOrderStatus(req, res, next) {
       createdAt: updated.createdAt,
     });
 
+    const serialized = serializeOrder(updated);
+    if (rawStatus === 'CONFIRMED' && serialized.status === 'ACCEPTED') {
+      serialized.status = 'CONFIRMED';
+    }
+
     res.status(200).json({
       success: true,
-      message: `Order marked as ${nextStatus}`,
-      data: serializeOrder(updated),
+      message: `Order marked as ${rawStatus}`,
+      data: serialized,
+      order: serialized,
     });
   } catch (err) {
     next(err);

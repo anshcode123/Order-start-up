@@ -1,5 +1,6 @@
 const prisma = require('../lib/prisma');
 const { uploadMenuItemImage } = require('../services/cloudinaryService');
+const { assertActiveSubscription, checkMenuItemLimit } = require('../services/subscriptionService');
 
 function serializeMenuItem(item) {
   return {
@@ -24,18 +25,11 @@ function validatePrice(price) {
   return null;
 }
 
-/**
- * Confirms a categoryId both exists and belongs to the given restaurant.
- * Used on create AND on update (Phase 4 spec #9, #13) - never trusts the
- * client's claim about which restaurant a category belongs to.
- */
 async function categoryBelongsToRestaurant(categoryId, restaurantId) {
   const category = await prisma.category.findUnique({ where: { id: categoryId } });
   return !!category && category.restaurantId === restaurantId;
 }
 
-// GET /api/restaurant/menu-items
-// Supports optional filters: ?categoryId=&isAvailable=true|false&search=
 async function getMenuItems(req, res, next) {
   try {
     const { categoryId, isAvailable, search } = req.query;
@@ -62,7 +56,6 @@ async function getMenuItems(req, res, next) {
   }
 }
 
-// GET /api/restaurant/menu-items/:id
 async function getMenuItemById(req, res, next) {
   try {
     const item = await prisma.menuItem.findUnique({
@@ -84,11 +77,11 @@ async function getMenuItemById(req, res, next) {
   }
 }
 
-// POST /api/restaurant/menu-items
-// restaurantId always comes from req.user.restaurantId, never the body
-// (Phase 4 spec #1, #8).
 async function createMenuItem(req, res, next) {
   try {
+    await assertActiveSubscription(req.user.restaurantId);
+    await checkMenuItemLimit(req.user.restaurantId);
+
     const { name, description, price, categoryId, imageUrl, isAvailable } = req.body;
 
     if (!name || !name.trim()) {
@@ -104,7 +97,7 @@ async function createMenuItem(req, res, next) {
 
     const categoryOk = await categoryBelongsToRestaurant(categoryId, req.user.restaurantId);
     if (!categoryOk) {
-      return res.status(400).json({
+      return res.status(404).json({
         success: false,
         message: 'Selected category does not belong to your restaurant',
       });
@@ -123,17 +116,18 @@ async function createMenuItem(req, res, next) {
       include: { category: { select: { name: true } } },
     });
 
+    const serialized = serializeMenuItem(item);
     res.status(201).json({
       success: true,
       message: 'Menu item created successfully',
-      data: serializeMenuItem(item),
+      data: serialized,
+      menuItem: serialized,
     });
   } catch (err) {
     next(err);
   }
 }
 
-// PUT /api/restaurant/menu-items/:id
 async function updateMenuItem(req, res, next) {
   try {
     const existing = await prisma.menuItem.findUnique({ where: { id: req.params.id } });
@@ -165,9 +159,6 @@ async function updateMenuItem(req, res, next) {
     if (description !== undefined) data.description = description.trim();
     if (price !== undefined) data.price = String(price);
     if (categoryId !== undefined) data.categoryId = categoryId;
-    // Only overwrite imageUrl if a new one was actually supplied - this
-    // is what stops a save that isn't re-uploading an image from wiping
-    // out the existing one (Phase 4 spec #13).
     if (imageUrl !== undefined) data.imageUrl = imageUrl || null;
     if (isAvailable !== undefined) data.isAvailable = Boolean(isAvailable);
 
@@ -187,35 +178,32 @@ async function updateMenuItem(req, res, next) {
   }
 }
 
-// PATCH /api/restaurant/menu-items/:id/availability
-async function updateAvailability(req, res, next) {
+async function toggleMenuItemAvailability(req, res, next) {
   try {
-    const { isAvailable } = req.body;
-    if (typeof isAvailable !== 'boolean') {
-      return res.status(400).json({ success: false, message: 'isAvailable must be true or false' });
-    }
-
     const existing = await prisma.menuItem.findUnique({ where: { id: req.params.id } });
     if (!existing || existing.restaurantId !== req.user.restaurantId) {
       return res.status(404).json({ success: false, message: 'Menu item not found' });
     }
 
+    const nextValue =
+      req.body.isAvailable !== undefined ? Boolean(req.body.isAvailable) : !existing.isAvailable;
+
     const updated = await prisma.menuItem.update({
       where: { id: existing.id },
-      data: { isAvailable },
+      data: { isAvailable: nextValue },
+      include: { category: { select: { name: true } } },
     });
 
     res.status(200).json({
       success: true,
-      message: isAvailable ? 'Item marked available' : 'Item marked unavailable',
-      data: { id: updated.id, isAvailable: updated.isAvailable },
+      message: `Menu item marked as ${updated.isAvailable ? 'available' : 'unavailable'}`,
+      data: serializeMenuItem(updated),
     });
   } catch (err) {
     next(err);
   }
 }
 
-// DELETE /api/restaurant/menu-items/:id
 async function deleteMenuItem(req, res, next) {
   try {
     const existing = await prisma.menuItem.findUnique({ where: { id: req.params.id } });
@@ -225,29 +213,29 @@ async function deleteMenuItem(req, res, next) {
 
     await prisma.menuItem.delete({ where: { id: existing.id } });
 
-    res.status(200).json({ success: true, message: 'Menu item deleted successfully', data: null });
+    res.status(200).json({
+      success: true,
+      message: 'Menu item deleted successfully',
+    });
   } catch (err) {
     next(err);
   }
 }
 
-// POST /api/restaurant/menu-items/upload-image
-// multipart/form-data, field name "image" (see middleware/upload.js).
-// Uploads to Cloudinary and returns the URL only - it does NOT touch any
-// MenuItem row, so a failed upload can never leave a broken/half-saved
-// item (Phase 4 spec #12).
 async function uploadImage(req, res, next) {
   try {
     if (!req.file) {
-      return res.status(400).json({ success: false, message: 'No image file was provided' });
+      return res.status(400).json({ success: false, message: 'No image file provided' });
     }
 
-    const url = await uploadMenuItemImage(req.file.buffer, req.file.mimetype);
+    const { imageUrl } = await uploadMenuItemImage(req.file.buffer, {
+      restaurantId: req.user.restaurantId,
+    });
 
     res.status(200).json({
       success: true,
       message: 'Image uploaded successfully',
-      data: { url },
+      data: { imageUrl },
     });
   } catch (err) {
     next(err);
@@ -259,7 +247,8 @@ module.exports = {
   getMenuItemById,
   createMenuItem,
   updateMenuItem,
-  updateAvailability,
+  toggleMenuItemAvailability,
+  updateAvailability: toggleMenuItemAvailability,
   deleteMenuItem,
   uploadImage,
 };

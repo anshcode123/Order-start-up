@@ -1,6 +1,6 @@
 const prisma = require('../lib/prisma');
+const { assertActiveSubscription, checkCategoryLimit } = require('../services/subscriptionService');
 
-// GET /api/restaurant/categories
 async function getCategories(req, res, next) {
   try {
     const categories = await prisma.category.findMany({
@@ -26,11 +26,11 @@ async function getCategories(req, res, next) {
   }
 }
 
-// POST /api/restaurant/categories
-// restaurantId is NEVER taken from the request body - it always comes
-// from the authenticated user's own record (Phase 4 spec #1, #3).
 async function createCategory(req, res, next) {
   try {
+    await assertActiveSubscription(req.user.restaurantId);
+    await checkCategoryLimit(req.user.restaurantId);
+
     const { name, description } = req.body;
 
     if (!name || !name.trim()) {
@@ -49,6 +49,7 @@ async function createCategory(req, res, next) {
       success: true,
       message: 'Category created successfully',
       data: category,
+      category,
     });
   } catch (err) {
     if (err.code === 'P2002') {
@@ -60,14 +61,10 @@ async function createCategory(req, res, next) {
   }
 }
 
-// PUT /api/restaurant/categories/:id
 async function updateCategory(req, res, next) {
   try {
     const existing = await prisma.category.findUnique({ where: { id: req.params.id } });
 
-    // Same response for "doesn't exist" and "belongs to another
-    // restaurant" - never reveal that a category with that id exists
-    // under a different restaurant.
     if (!existing || existing.restaurantId !== req.user.restaurantId) {
       return res.status(404).json({ success: false, message: 'Category not found' });
     }
@@ -89,6 +86,7 @@ async function updateCategory(req, res, next) {
       success: true,
       message: 'Category updated successfully',
       data: category,
+      category,
     });
   } catch (err) {
     if (err.code === 'P2002') {
@@ -100,7 +98,6 @@ async function updateCategory(req, res, next) {
   }
 }
 
-// DELETE /api/restaurant/categories/:id
 async function deleteCategory(req, res, next) {
   try {
     const existing = await prisma.category.findUnique({ where: { id: req.params.id } });
@@ -119,7 +116,10 @@ async function deleteCategory(req, res, next) {
 
     await prisma.category.delete({ where: { id: existing.id } });
 
-    res.status(200).json({ success: true, message: 'Category deleted successfully', data: null });
+    res.status(200).json({
+      success: true,
+      message: 'Category deleted successfully',
+    });
   } catch (err) {
     next(err);
   }

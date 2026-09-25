@@ -3,9 +3,10 @@ const { Prisma } = require('@prisma/client');
 const prisma = require('../lib/prisma');
 const { emitToRestaurant } = require('./socketService');
 const { sendOrderNotification } = require('./whatsappService');
+const { assertActiveSubscription, checkOrderLimit } = require('./subscriptionService');
 
 const TABLE_NUMBER_MAX_LENGTH = 30;
-const MAX_QUANTITY_PER_ITEM = 999; // defensive cap, not a business rule
+const MAX_QUANTITY_PER_ITEM = 99;
 
 const ORDER_STATUSES = [
   'PENDING',
@@ -17,9 +18,6 @@ const ORDER_STATUSES = [
   'REJECTED',
 ];
 
-// What each status is allowed to move to next. COMPLETED/CANCELLED/
-// REJECTED are terminal - this is what stops something like
-// COMPLETED -> PREPARING (Phase 6 spec #14).
 const ALLOWED_TRANSITIONS = {
   PENDING: ['ACCEPTED', 'REJECTED', 'CANCELLED'],
   ACCEPTED: ['PREPARING', 'CANCELLED'],
@@ -40,7 +38,6 @@ function isValidTransition(from, to) {
   return Boolean(ALLOWED_TRANSITIONS[from] && ALLOWED_TRANSITIONS[from].includes(to));
 }
 
-/** Trims and validates a customer-supplied table number. Always a String. */
 function validateTableNumber(rawValue) {
   if (typeof rawValue !== 'string') {
     throw apiError(400, 'Table number is required');
@@ -55,16 +52,10 @@ function validateTableNumber(rawValue) {
   return tableNumber;
 }
 
-/**
- * A secure, unguessable reference for the public order-status endpoint -
- * deliberately separate from the internal `id` (Phase 6 spec #17).
- * base64url keeps it URL-safe with no padding characters to escape.
- */
 function generatePublicToken() {
   return crypto.randomBytes(24).toString('base64url');
 }
 
-/** Short label for display only ("Order #A8F2") - never used for lookups. */
 function deriveOrderNumber(publicToken) {
   return publicToken.slice(0, 4).toUpperCase();
 }
@@ -80,27 +71,37 @@ function serializeOrderItem(item) {
   };
 }
 
-/**
- * Creates an Order + its OrderItems from raw, untrusted client input.
- * Every price, name, and the restaurant itself is re-derived from
- * PostgreSQL - nothing from `items` except menuItemId/quantity is ever
- * trusted (Phase 6 spec #5, #6, #22, #23).
- *
- * Throws an Error with .statusCode set on any validation failure; the
- * whole Order+OrderItems write happens in a single Prisma transaction,
- * so a failure partway through never leaves a partial order behind.
- */
+function isDuplicateCart(existingItems, newLines) {
+  if (!existingItems || existingItems.length !== newLines.length) return false;
+  const sortedExisting = [...existingItems].sort((a, b) =>
+    (a.menuItemId || '').localeCompare(b.menuItemId || '')
+  );
+  const sortedNew = [...newLines].sort((a, b) =>
+    (a.menuItemId || '').localeCompare(b.menuItemId || '')
+  );
+
+  for (let i = 0; i < sortedExisting.length; i++) {
+    if (sortedExisting[i].menuItemId !== sortedNew[i].menuItemId) return false;
+    if (sortedExisting[i].quantity !== sortedNew[i].quantity) return false;
+  }
+  return true;
+}
+
 async function createOrderFromCart({ restaurantSlug, tableNumber: rawTableNumber, items }) {
   if (!restaurantSlug || typeof restaurantSlug !== 'string') {
     throw apiError(400, 'restaurantSlug is required');
   }
 
   const restaurant = await prisma.restaurant.findUnique({ where: { slug: restaurantSlug } });
-  // Same 404 message style as the public menu endpoint - a disabled
-  // restaurant must not be distinguishable from a nonexistent one.
-  if (!restaurant || !restaurant.isActive) {
+  if (!restaurant) {
     throw apiError(404, 'Restaurant menu is currently unavailable.');
   }
+  if (!restaurant.isActive) {
+    throw apiError(403, 'Restaurant menu is currently unavailable.');
+  }
+
+  await assertActiveSubscription(restaurant.id);
+  await checkOrderLimit(restaurant.id);
 
   const tableNumber = validateTableNumber(rawTableNumber);
 
@@ -108,7 +109,6 @@ async function createOrderFromCart({ restaurantSlug, tableNumber: rawTableNumber
     throw apiError(400, 'Your cart is empty');
   }
 
-  // Basic shape validation before touching the database.
   for (const line of items) {
     if (!line || typeof line.menuItemId !== 'string' || !line.menuItemId) {
       throw apiError(400, 'Each item must include a valid menuItemId');
@@ -126,15 +126,10 @@ async function createOrderFromCart({ restaurantSlug, tableNumber: rawTableNumber
   const menuItems = await prisma.menuItem.findMany({ where: { id: { in: menuItemIds } } });
   const menuItemById = new Map(menuItems.map((item) => [item.id, item]));
 
-  // Build order lines from CURRENT database state only - price and name
-  // are never taken from the request (Phase 6 spec #23).
   const orderLines = items.map((line) => {
     const menuItem = menuItemById.get(line.menuItemId);
 
     if (!menuItem || menuItem.restaurantId !== restaurant.id) {
-      // Same message whether the id doesn't exist at all or belongs to
-      // a different restaurant - never confirm another restaurant's
-      // menu item exists.
       throw apiError(400, 'One or more items are not available from this restaurant.');
     }
     if (!menuItem.isAvailable) {
@@ -142,8 +137,6 @@ async function createOrderFromCart({ restaurantSlug, tableNumber: rawTableNumber
     }
 
     const quantity = Number(line.quantity);
-    // Decimal arithmetic via the Prisma Decimal the item already came
-    // with - never coerced through a JS float.
     const subtotal = menuItem.price.mul(quantity);
 
     return {
@@ -159,6 +152,30 @@ async function createOrderFromCart({ restaurantSlug, tableNumber: rawTableNumber
     (sum, line) => sum.add(line.subtotal),
     new Prisma.Decimal(0)
   );
+
+  // 5-second duplicate order idempotency protection
+  const DUPLICATE_WINDOW_MS = 5000;
+  const cutoffTime = new Date(Date.now() - DUPLICATE_WINDOW_MS);
+
+  const recentOrder = await prisma.order.findFirst({
+    where: {
+      restaurantId: restaurant.id,
+      tableNumber,
+      createdAt: { gte: cutoffTime },
+      status: 'PENDING',
+    },
+    include: {
+      items: true,
+      restaurant: {
+        select: { name: true, whatsappNumber: true, phone: true },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  if (recentOrder && isDuplicateCart(recentOrder.items, orderLines)) {
+    return recentOrder;
+  }
 
   const order = await prisma.$transaction(async (tx) => {
     const createdOrder = await tx.order.create({
@@ -180,9 +197,7 @@ async function createOrderFromCart({ restaurantSlug, tableNumber: rawTableNumber
     return createdOrder;
   });
 
-  // Emit ONLY after the transaction has committed (Phase 7 spec #7) -
-  // never before, and never if the transaction throws above.
-  emitToRestaurant(restaurant.id, 'order:new', {
+  const eventPayload = {
     orderId: order.id,
     publicOrderReference: order.publicToken,
     tableNumber: order.tableNumber,
@@ -190,18 +205,24 @@ async function createOrderFromCart({ restaurantSlug, tableNumber: rawTableNumber
     totalAmount: order.totalAmount.toString(),
     status: order.status,
     createdAt: order.createdAt,
-  });
+    order: {
+      id: order.id,
+      restaurantId: restaurant.id,
+      tableNumber: order.tableNumber,
+      status: order.status,
+      totalAmount: order.totalAmount.toString(),
+    },
+  };
+  emitToRestaurant(restaurant.id, 'order:new', eventPayload);
+  emitToRestaurant(restaurant.id, 'new_order', eventPayload);
 
-  // Phase 8: WhatsApp Order Notification
-  // Completely isolated from order creation - any WhatsApp failure,
-  // network timeout, or missing credentials will never roll back or fail the order.
   try {
     await sendOrderNotification({
       order,
       restaurant: order.restaurant || restaurant,
     });
   } catch (whatsappErr) {
-    console.error('WhatsApp notification dispatch error:', whatsappErr.message);
+    console.error('[OrderService] WhatsApp notification hook error:', whatsappErr.message);
   }
 
   return order;
@@ -216,5 +237,4 @@ module.exports = {
   deriveOrderNumber,
   serializeOrderItem,
   createOrderFromCart,
-  apiError,
 };

@@ -1,51 +1,56 @@
-const { verifyToken } = require('../utils/token');
 const prisma = require('../lib/prisma');
+const { verifyToken } = require('../utils/token');
 
-/**
- * Verifies the Bearer token and attaches the authenticated user to
- * req.user. Loads the user fresh from the DB (rather than trusting the
- * token payload alone) so a deactivated/deleted user is rejected even
- * with a still-valid token.
- *
- * req.user ends up with: id, name, email, role, restaurant, isActive
- * (restaurant is the restaurant id string, or null - not populated here).
- * NOTE: Prisma's column is `restaurantId` - it's normalized to
- * `restaurant` here so every downstream consumer (restaurantAccess.js,
- * controllers, etc.) keeps working unchanged after the Mongo -> Postgres
- * migration.
- */
 async function protect(req, res, next) {
   try {
-    const header = req.headers.authorization || '';
-    const [scheme, token] = header.split(' ');
-
-    if (scheme !== 'Bearer' || !token) {
-      return res.status(401).json({ success: false, message: 'Not authenticated' });
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, message: 'Not authorized, token missing' });
     }
 
-    const payload = verifyToken(token);
+    const token = authHeader.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'Not authorized, token missing' });
+    }
 
-    const user = await prisma.user.findUnique({ where: { id: payload.id } });
+    const decoded = verifyToken(token);
 
+    const user = await prisma.user.findUnique({ where: { id: decoded.id } });
     if (!user || !user.isActive) {
-      return res.status(401).json({ success: false, message: 'Not authenticated' });
+      return res.status(401).json({ success: false, message: 'User no longer active or not found' });
     }
 
-    req.user = { ...user, restaurant: user.restaurantId };
+    if (user.role === 'RESTAURANT_ADMIN' && user.restaurantId) {
+      const restaurant = await prisma.restaurant.findUnique({
+        where: { id: user.restaurantId },
+        select: { isActive: true },
+      });
+      if (!restaurant || !restaurant.isActive) {
+        return res.status(403).json({
+          success: false,
+          message: 'Restaurant account is inactive',
+        });
+      }
+    }
+
+    req.user = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      restaurant: user.restaurantId,
+      restaurantId: user.restaurantId,
+    };
     next();
   } catch (err) {
-    return res.status(401).json({ success: false, message: 'Not authenticated' });
+    return res.status(401).json({ success: false, message: 'Not authorized, token invalid or expired' });
   }
 }
 
-/**
- * Restricts a route to one or more roles. Use AFTER protect().
- *   router.get('/x', protect, authorize('SUPER_ADMIN'), handler)
- */
 function authorize(...roles) {
   return (req, res, next) => {
     if (!req.user || !roles.includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: 'Forbidden' });
+      return res.status(403).json({ success: false, message: 'Forbidden: insufficient permissions' });
     }
     next();
   };

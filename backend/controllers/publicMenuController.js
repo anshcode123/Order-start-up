@@ -53,24 +53,29 @@ async function getPublicMenu(req, res, next) {
     // items grouped by category, not empty categories for their own sake.
     const categoriesWithItems = categories.filter((category) => category.menuItems.length > 0);
 
+    const formattedCategories = categoriesWithItems.map((category) => ({
+      id: category.id,
+      name: category.name,
+      description: category.description,
+      items: category.menuItems.map(serializePublicMenuItem),
+    }));
+    const formattedRestaurant = {
+      id: restaurant.id,
+      name: restaurant.name,
+      slug: restaurant.slug,
+      description: restaurant.description,
+      phone: restaurant.phone,
+      address: restaurant.address,
+    };
+
     res.status(200).json({
       success: true,
       message: 'Menu fetched successfully',
+      restaurant: formattedRestaurant,
+      categories: formattedCategories,
       data: {
-        restaurant: {
-          id: restaurant.id,
-          name: restaurant.name,
-          slug: restaurant.slug,
-          description: restaurant.description,
-          phone: restaurant.phone,
-          address: restaurant.address,
-        },
-        categories: categoriesWithItems.map((category) => ({
-          id: category.id,
-          name: category.name,
-          description: category.description,
-          items: category.menuItems.map(serializePublicMenuItem),
-        })),
+        restaurant: formattedRestaurant,
+        categories: formattedCategories,
       },
     });
   } catch (err) {

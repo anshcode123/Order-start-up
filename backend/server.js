@@ -19,8 +19,10 @@ const publicOrderRoutes = require('./routes/publicOrders');
 
 const orderRoutes = require('./routes/orders');
 const superAdminRoutes = require('./routes/superAdmin');
+const { corsOptions } = require('./config/cors');
+const securityHeaders = require('./middleware/security');
+const { globalRateLimiter } = require('./middleware/rateLimiter');
 const notFound = require('./middleware/notFound');
-
 const errorHandler = require('./middleware/errorHandler');
 
 const PORT = process.env.PORT || 5000;
@@ -28,12 +30,15 @@ const PORT = process.env.PORT || 5000;
 function createApp() {
   const app = express();
 
-  // Security / parsing basics
-  app.use(cors({ origin: process.env.CLIENT_ORIGIN || '*' }));
+  app.disable('x-powered-by');
+  app.use(securityHeaders);
+  app.use(cors(corsOptions));
+
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-  // Routes
+  app.use(globalRateLimiter);
+
   app.use('/api/health', healthRoutes);
   app.use('/api/auth', authRoutes);
   app.use('/api/admin', adminRoutes);
@@ -41,13 +46,14 @@ function createApp() {
   app.use('/api/restaurants', restaurantRoutes);
 
   app.use('/api/restaurant/categories', categoryRoutes);
+  app.use('/api/categories', categoryRoutes);
   app.use('/api/restaurant/menu-items', menuItemRoutes);
-  app.use('/api/restaurant/orders', orderRoutes); // Phase 6
-  app.use('/api/restaurant', restaurantSelfRoutes); // /dashboard, /qr (Phase 4)
-  app.use('/api/public/menu', publicMenuRoutes); // Phase 5 - no auth
-  app.use('/api/public/orders', publicOrderRoutes); // Phase 6 - no auth
+  app.use('/api/menu', menuItemRoutes);
+  app.use('/api/restaurant/orders', orderRoutes);
+  app.use('/api/restaurant', restaurantSelfRoutes);
+  app.use('/api/public/menu', publicMenuRoutes);
+  app.use('/api/public/orders', publicOrderRoutes);
 
-  // 404 + error handling (must be last)
   app.use(notFound);
   app.use(errorHandler);
 
@@ -56,16 +62,12 @@ function createApp() {
 
 async function start() {
   try {
-    // Connect to PostgreSQL (via Prisma) BEFORE starting the HTTP server.
     await connectDB();
 
-    const app = createApp();
+    const { seedDefaultPlans } = require('./services/subscriptionService');
+    await seedDefaultPlans();
 
-    // Socket.IO attaches to the SAME HTTP server Express already uses -
-    // this is not a second server (Phase 7 spec #2). createApp() still
-    // returns a plain Express app; wrapping it here is the only change
-    // needed for everything already using `app` (routes, middleware) to
-    // keep working exactly as before.
+    const app = createApp();
     const server = http.createServer(app);
     initializeSocket(server);
 

@@ -13,6 +13,7 @@ class AppRoutes {
   static String dashboardMenuItemEdit(String id) => '/dashboard/menu/$id/edit';
   static const String dashboardQr = '/dashboard/qr';
   static const String dashboardSettings = '/dashboard/settings';
+  static const String dashboardSubscription = '/dashboard/subscription';
 
   // Route templates (as registered with go_router, with :id placeholders)
   static const String dashboardMenuItemEditTemplate =
@@ -21,6 +22,8 @@ class AppRoutes {
   // Super Admin
   static const String superAdminDashboard = '/super-admin';
   static const String superAdminAnalytics = '/super-admin/analytics';
+  static const String superAdminPlans = '/super-admin/plans';
+  static const String superAdminSubscriptions = '/super-admin/subscriptions';
   static const String superAdminRestaurants = '/super-admin/restaurants';
   static const String superAdminRestaurantCreate =
       '/super-admin/restaurants/create';
