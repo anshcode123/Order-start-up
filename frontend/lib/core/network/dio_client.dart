@@ -7,13 +7,14 @@ import 'package:scanserve/core/network/token_storage.dart';
 /// flutter build web --dart-define=API_BASE_URL=https://api.yourdomain.com/api
 const String kApiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'http://localhost:5000/api',
+  defaultValue: 'https://order-start-up.onrender.com/api',
 );
 
 /// Overridden in main.dart once SharedPreferences has loaded, since
 /// that load is async and providers are constructed synchronously.
 final tokenStorageProvider = Provider<TokenStorage>((ref) {
-  throw UnimplementedError('tokenStorageProvider must be overridden in main.dart');
+  throw UnimplementedError(
+      'tokenStorageProvider must be overridden in main.dart');
 });
 
 /// Riverpod provider exposing a configured [Dio] instance for the whole app.
