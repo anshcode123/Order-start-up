@@ -8,12 +8,9 @@ Color _colorForStatus(String status) {
       return AppColors.primary;
     case 'ACCEPTED':
     case 'PREPARING':
-      return const Color(
-          0xFF3D7EDB); // informational blue - no existing token for this
+      return const Color(0xFF3D7EDB);
     case 'READY':
       return AppColors.success;
-    case 'COMPLETED':
-      return AppColors.textMuted;
     case 'CANCELLED':
     case 'REJECTED':
       return AppColors.error;

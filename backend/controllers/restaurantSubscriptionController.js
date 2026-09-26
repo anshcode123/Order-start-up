@@ -33,6 +33,8 @@ async function getOwnSubscription(req, res, next) {
       message: 'Subscription fetched successfully',
       data: serialized,
       subscription: serialized,
+      plan: serialized.plan,
+      usage: serialized.usage,
     });
   } catch (err) {
     next(err);

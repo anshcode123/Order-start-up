@@ -2,237 +2,176 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:scanserve/core/constants/app_routes.dart';
-import 'package:scanserve/core/network/api_exception.dart';
 import 'package:scanserve/core/theme/app_colors.dart';
 import 'package:scanserve/core/theme/app_text_styles.dart';
 import 'package:scanserve/core/utils/responsive.dart';
 import 'package:scanserve/features/customer_menu/providers/cart_provider.dart';
 import 'package:scanserve/features/customer_menu/providers/order_submission_provider.dart';
+import 'package:scanserve/features/customer_menu/providers/public_menu_provider.dart';
 import 'package:scanserve/features/customer_menu/providers/table_number_provider.dart';
-import 'package:scanserve/shared/models/cart_item.dart';
 import 'package:scanserve/shared/widgets/app_button.dart';
+import 'package:scanserve/shared/widgets/app_dialogs.dart';
 
-/// /order/review - the spec describes this as two conceptual steps
-/// (enter table number, then review the order), but the routing section
-/// only allows /menu/:slug, /cart, and /order/review - so both steps
-/// live in this one route, switched on whether tableNumberProvider is
-/// set yet.
 class OrderReviewScreen extends ConsumerWidget {
   const OrderReviewScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final cart = ref.watch(cartProvider);
+    final diningType = ref.watch(diningTypeProvider);
     final tableNumber = ref.watch(tableNumberProvider);
+    final submission = ref.watch(orderSubmissionProvider);
+    final menuAsync = cart.restaurantSlug != null
+        ? ref.watch(publicMenuProvider(cart.restaurantSlug!))
+        : null;
+    final requireTableNumber = menuAsync?.valueOrNull?.restaurant.requireTableNumber ?? true;
+
+    ref.listen<OrderSubmissionState>(orderSubmissionProvider, (previous, next) {
+      if (next.status == OrderSubmissionStatus.success && next.order != null) {
+        context.go(AppRoutes.orderSuccess(next.order!.orderId), extra: next.order);
+      } else if (next.status == OrderSubmissionStatus.failure && next.errorMessage != null) {
+        showErrorSnackBar(context, next.errorMessage!);
+      }
+    });
+
+    final missingRequiredTable = diningType == 'DINE_IN' &&
+        requireTableNumber &&
+        (tableNumber == null || tableNumber.trim().isEmpty);
+
+    if (cart.isEmpty || missingRequiredTable) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(backgroundColor: AppColors.surface, title: const Text('Review Order')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  missingRequiredTable
+                      ? 'Please enter your table number for Dine In.'
+                      : 'Nothing to review yet.',
+                  style: AppTextStyles.title,
+                ),
+                const SizedBox(height: 12),
+                AppPrimaryButton(
+                  label: 'Back to Cart',
+                  onPressed: () => context.go(AppRoutes.cart),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final diningLabel = diningType == 'TAKEAWAY' ? 'Takeaway' : 'Dine In';
+    final hasTable =
+        diningType == 'DINE_IN' && tableNumber != null && tableNumber.trim().isNotEmpty;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.surface,
-        title: Text(tableNumber == null ? 'Table Number' : 'Review Order'),
+        title: const Text('Review Order'),
       ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.all(Responsive.pagePadding(context)),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.all(Responsive.pagePadding(context)),
+        child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: tableNumber == null
-                ? const _TableNumberForm()
-                : const _OrderReviewView(),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TableNumberForm extends ConsumerStatefulWidget {
-  const _TableNumberForm();
-
-  @override
-  ConsumerState<_TableNumberForm> createState() => _TableNumberFormState();
-}
-
-class _TableNumberFormState extends ConsumerState<_TableNumberForm> {
-  final _formKey = GlobalKey<FormState>();
-  final _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _continue() {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
-    ref.read(tableNumberProvider.notifier).state = _controller.text.trim();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Form(
-      key: _formKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('What table are you at?', style: AppTextStyles.headline),
-          const SizedBox(height: 8),
-          Text(
-            'This is the only information we need from you - no name, '
-            'phone, or account required.',
-            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
-          ),
-          const SizedBox(height: 24),
-          Text('Table Number *',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w500,
-              )),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: _controller,
-            autofocus: true,
-            maxLength: kTableNumberMaxLength,
-            textCapitalization: TextCapitalization.characters,
-            decoration: const InputDecoration(hintText: 'e.g. 12 or A12'),
-            onFieldSubmitted: (_) => _continue(),
-            validator: (value) {
-              final trimmed = value?.trim() ?? '';
-              if (trimmed.isEmpty) return 'Table number is required';
-              if (trimmed.length > kTableNumberMaxLength) {
-                return 'Table number is too long';
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 16),
-          AppPrimaryButton(
-              label: 'Continue', expand: true, onPressed: _continue),
-        ],
-      ),
-    );
-  }
-}
-
-class _OrderReviewView extends ConsumerStatefulWidget {
-  const _OrderReviewView();
-
-  @override
-  ConsumerState<_OrderReviewView> createState() => _OrderReviewViewState();
-}
-
-class _OrderReviewViewState extends ConsumerState<_OrderReviewView> {
-  Future<void> _placeOrder() async {
-    await ref.read(orderSubmissionProvider.notifier).submit();
-    if (!mounted) return;
-
-    final result = ref.read(orderSubmissionProvider);
-    if (result.status == OrderSubmissionStatus.success &&
-        result.order != null) {
-      context.pushReplacement(AppRoutes.orderSuccess(result.order!.orderId));
-    }
-    // On failure, state.errorMessage is shown inline below - the cart
-    // and table number are untouched so the customer can just retry
-    // (Phase 6 spec #19).
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cart = ref.watch(cartProvider);
-    final tableNumber = ref.watch(tableNumberProvider)!;
-    final submission = ref.watch(orderSubmissionProvider);
-    final isSubmitting = submission.isSubmitting;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (cart.restaurantName != null)
-          Text(cart.restaurantName!, style: AppTextStyles.displayMedium),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: AppColors.primaryLight,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.table_bar_outlined,
-                  size: 18, color: AppColors.primaryDark),
-              const SizedBox(width: 8),
-              Text('Table $tableNumber',
-                  style: AppTextStyles.title.copyWith(fontSize: 15)),
-              const Spacer(),
-              TextButton(
-                onPressed: isSubmitting
-                    ? null
-                    : () => ref.read(tableNumberProvider.notifier).state = null,
-                child: const Text('Change'),
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.border),
               ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-        for (final item in cart.items) _ReviewLine(item: item),
-        const Divider(height: 32, color: AppColors.border),
-        Row(
-          children: [
-            const Text('Subtotal', style: AppTextStyles.title),
-            const Spacer(),
-            Text(cart.subtotalDisplay,
-                style:
-                    AppTextStyles.title.copyWith(color: AppColors.primaryDark)),
-          ],
-        ),
-        if (submission.status == OrderSubmissionStatus.failure) ...[
-          const SizedBox(height: 16),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.error.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (cart.restaurantName != null) ...[
+                    Text(cart.restaurantName!, style: AppTextStyles.displayMedium),
+                    const SizedBox(height: 8),
+                  ],
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryLight,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          diningType == 'TAKEAWAY'
+                              ? Icons.takeout_dining_outlined
+                              : Icons.table_bar_outlined,
+                          size: 18,
+                          color: AppColors.primaryDark,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          hasTable ? '$diningLabel · Table $tableNumber' : diningLabel,
+                          style: AppTextStyles.title.copyWith(
+                            fontSize: 15,
+                            color: AppColors.primaryDark,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Divider(color: AppColors.border),
+                  const SizedBox(height: 12),
+                  for (final item in cart.items)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${item.quantity} × ${item.displayName}',
+                              style: AppTextStyles.body.copyWith(color: AppColors.textPrimary),
+                            ),
+                          ),
+                          Text(
+                            '₹${item.subtotal.toStringAsFixed(2)}',
+                            style: AppTextStyles.title.copyWith(fontSize: 15),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  const Divider(color: AppColors.border),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Text('Total', style: AppTextStyles.title),
+                      const Spacer(),
+                      Text(
+                        cart.formattedTotal,
+                        style: AppTextStyles.displayMedium.copyWith(
+                          fontSize: 22,
+                          color: AppColors.primaryDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  AppPrimaryButton(
+                    label: submission.isSubmitting ? 'Placing Order...' : 'Place Order',
+                    expand: true,
+                    onPressed: submission.isSubmitting
+                        ? null
+                        : () => ref.read(orderSubmissionProvider.notifier).submit(),
+                  ),
+                ],
+              ),
             ),
-            child: Text(
-              submission.errorMessage ??
-                  apiErrorMessage(Exception('Unknown error')),
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.error),
-            ),
           ),
-        ],
-        const SizedBox(height: 28),
-        AppPrimaryButton(
-          // Disabled while submitting - the primary guard against an
-          // accidental double-tap creating two orders (Phase 6 spec
-          // #20); OrderSubmissionNotifier.submit() also no-ops if a
-          // submission is already in flight, as a backstop.
-          label: isSubmitting ? 'Placing Order...' : 'Place Order',
-          expand: true,
-          onPressed: isSubmitting ? null : _placeOrder,
         ),
-      ],
-    );
-  }
-}
-
-class _ReviewLine extends StatelessWidget {
-  const _ReviewLine({required this.item});
-  final CartItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text('${item.name} × ${item.quantity}',
-                style:
-                    AppTextStyles.body.copyWith(color: AppColors.textPrimary)),
-          ),
-          Text(item.subtotalDisplay,
-              style: AppTextStyles.body.copyWith(color: AppColors.textPrimary)),
-        ],
       ),
     );
   }

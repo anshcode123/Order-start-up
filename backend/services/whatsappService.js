@@ -1,53 +1,26 @@
-/**
- * Short label for display only ("Order #A8F2") derived from publicToken.
- */
 function deriveOrderNumber(publicToken) {
   return publicToken ? publicToken.slice(0, 4).toUpperCase() : '----';
 }
 
-/**
- * Normalizes phone numbers to digits only for WhatsApp Cloud API (E.164 format without '+').
- * E.g. "+91 98765-43210" -> "919876543210"
- */
 function normalizePhoneNumber(rawNumber) {
   if (!rawNumber || typeof rawNumber !== 'string') return '';
   return rawNumber.replace(/\D/g, '');
 }
 
-/**
- * Formats the order notification message text per Phase 8 specification:
- *
- * ScanServe
- * New Order
- *
- * Order reference:
- * #XXXX
- *
- * Restaurant:
- * <Restaurant Name>
- *
- * Table:
- * <Table Number>
- *
- * Items:
- *
- * <Item Name> × <Quantity>
- * ₹<Subtotal>
- *
- * Total:
- * ₹<Total Amount>
- *
- * Status:
- * PENDING
- */
 function formatOrderMessage({ order, restaurantName }) {
   const orderRef = `#${deriveOrderNumber(order.publicToken)}`;
+  const diningLabel = order.diningType === 'TAKEAWAY' ? 'Takeaway' : 'Dine In';
 
   const itemsLines = (order.items || [])
-    .map((item) => `${item.itemName} × ${item.quantity}\n₹${item.subtotal}`)
-    .join('\n\n');
+    .map((item) => {
+      const displayName = item.variantName
+        ? `${item.itemName} (${item.variantName})`
+        : item.itemName;
+      return `${displayName} × ${item.quantity} — ₹${item.subtotal}`;
+    })
+    .join('\n');
 
-  return [
+  const lines = [
     'ScanServe',
     'New Order',
     '',
@@ -57,32 +30,29 @@ function formatOrderMessage({ order, restaurantName }) {
     'Restaurant:',
     restaurantName || 'ScanServe Partner',
     '',
-    'Table:',
-    order.tableNumber,
+    'Dining Type:',
+    diningLabel,
+  ];
+
+  if (order.tableNumber && String(order.tableNumber).trim() !== '') {
+    lines.push('', 'Table:', String(order.tableNumber).trim());
+  }
+
+  lines.push(
     '',
     'Items:',
-    '',
     itemsLines,
     '',
     'Total:',
     `₹${order.totalAmount}`,
     '',
     'Status:',
-    order.status || 'PENDING',
-  ].join('\n');
+    order.status || 'PENDING'
+  );
+
+  return lines.join('\n');
 }
 
-/**
- * Sends a WhatsApp order notification to the restaurant's configured WhatsApp number.
- *
- * Responsibilities:
- * - Formats order details strictly per spec.
- * - Checks environment credentials (WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID).
- * - Operates safely in Development Mode when credentials are not configured.
- * - Uses Meta's WhatsApp Cloud API.
- * - Isolates errors so order creation in PostgreSQL never fails or rolls back because of WhatsApp.
- * - Never logs or exposes access tokens.
- */
 async function sendOrderNotification({ order, restaurant }) {
   const orderRef = deriveOrderNumber(order.publicToken);
 
@@ -90,7 +60,6 @@ async function sendOrderNotification({ order, restaurant }) {
     const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
     const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
-    // 1. Dev Mode check - missing WhatsApp Cloud API credentials
     if (!accessToken || !phoneNumberId) {
       console.log(
         `[WhatsApp Dev Mode] Credentials not configured. Skipping WhatsApp notification for order #${orderRef}.`
@@ -98,7 +67,6 @@ async function sendOrderNotification({ order, restaurant }) {
       return { sent: false, reason: 'DEV_MODE_NO_CREDENTIALS' };
     }
 
-    // 2. Destination phone number check
     const rawNumber = restaurant.whatsappNumber || restaurant.phone;
     const cleanNumber = normalizePhoneNumber(rawNumber);
 
@@ -119,7 +87,7 @@ async function sendOrderNotification({ order, restaurant }) {
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -148,7 +116,6 @@ async function sendOrderNotification({ order, restaurant }) {
     console.log(`[WhatsApp] Notification sent successfully for order #${orderRef} to ${cleanNumber}.`);
     return { sent: true, messageId: responseData?.messages?.[0]?.id };
   } catch (err) {
-    // Isolated error handling: log safe error message without token leakage
     console.error(
       `[WhatsApp] Unexpected error sending notification for order #${orderRef}:`,
       err.message || 'Unknown error'

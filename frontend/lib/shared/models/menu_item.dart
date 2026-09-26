@@ -1,5 +1,46 @@
-/// A menu item, scoped to the caller's own restaurant
-/// (GET/POST/PUT/DELETE /api/restaurant/menu-items).
+class MenuItemVariant {
+  const MenuItemVariant({
+    required this.id,
+    required this.name,
+    required this.price,
+    this.sortOrder = 0,
+    this.isAvailable = true,
+  });
+
+  final String id;
+  final String name;
+  final String price;
+  final int sortOrder;
+  final bool isAvailable;
+
+  double get numericPrice => double.tryParse(price) ?? 0.0;
+
+  String get formattedPrice => '₹${numericPrice.toStringAsFixed(2)}';
+
+  factory MenuItemVariant.fromJson(Map<String, dynamic> json) {
+    return MenuItemVariant(
+      id: (json['id'] as String?) ?? '',
+      name: (json['name'] as String?) ?? '',
+      price: json['price'].toString(),
+      sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
+      isAvailable: (json['isAvailable'] as bool?) ?? true,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (id.isNotEmpty) 'id': id,
+      'name': name,
+      'price': price,
+      'sortOrder': sortOrder,
+      'isAvailable': isAvailable,
+    };
+  }
+}
+
+/// A menu item. `price` comes back from the backend as a string (Prisma
+/// Decimal serialized safely) so we keep the raw string for display and
+/// parse on demand when we need to format it.
 class MenuItem {
   const MenuItem({
     required this.id,
@@ -9,34 +50,50 @@ class MenuItem {
     required this.imageUrl,
     required this.isAvailable,
     required this.categoryId,
-    required this.categoryName,
+    this.categoryName,
+    this.hasVariants = false,
+    this.variants = const [],
   });
 
   final String id;
   final String name;
   final String description;
-  // Kept as a String end-to-end (matches the backend's Decimal, sent as
-  // a string) so display never round-trips through a Dart double.
   final String price;
   final String? imageUrl;
   final bool isAvailable;
   final String categoryId;
   final String? categoryName;
+  final bool hasVariants;
+  final List<MenuItemVariant> variants;
+
+  double get numericPrice => double.tryParse(price) ?? 0.0;
+
+  String get formattedPrice => '₹${numericPrice.toStringAsFixed(2)}';
+
+  String get formattedPriceSummary {
+    if (hasVariants && variants.isNotEmpty) {
+      return variants
+          .map((v) => '${v.name}: ${v.formattedPrice}${v.isAvailable ? '' : ' (Unavailable)'}')
+          .join('  •  ');
+    }
+    return formattedPrice;
+  }
 
   factory MenuItem.fromJson(Map<String, dynamic> json) {
+    final rawVariants = (json['variants'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
     return MenuItem(
       id: json['id'] as String,
       name: json['name'] as String,
-      description: json['description'] as String? ?? '',
-      price: json['price'] as String,
+      description: (json['description'] as String?) ?? '',
+      price: json['price'].toString(),
       imageUrl: json['imageUrl'] as String?,
-      isAvailable: json['isAvailable'] as bool? ?? true,
+      // Public menu payloads omit `isAvailable` because the endpoint
+      // already filters to available-only items.
+      isAvailable: (json['isAvailable'] as bool?) ?? true,
       categoryId: json['categoryId'] as String,
       categoryName: json['categoryName'] as String?,
+      hasVariants: (json['hasVariants'] as bool?) ?? false,
+      variants: rawVariants.map(MenuItemVariant.fromJson).toList(),
     );
   }
-
-  /// For display only - e.g. "299.00". Formatting/currency symbol is the
-  /// caller's job.
-  String get formattedPrice => price;
 }

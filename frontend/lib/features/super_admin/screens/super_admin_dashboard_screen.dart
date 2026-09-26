@@ -131,7 +131,7 @@ class SuperAdminDashboardScreen extends ConsumerWidget {
                           accentColor: Colors.orange.shade800,
                         ),
                         StatCard(
-                          label: 'Completed Orders',
+                          label: 'Ready Orders',
                           value: dashboard.completedOrders,
                           icon: Icons.done_all_outlined,
                           accentColor: AppColors.success,

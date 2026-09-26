@@ -7,7 +7,6 @@ const {
 } = require('../utils/dateRange');
 const { ORDER_STATUSES } = require('../services/orderService');
 
-// Helper to normalize status breakdown map
 function buildStatusBreakdown(groupedStatusRows) {
   const breakdown = {};
   for (const status of ORDER_STATUSES) {
@@ -22,28 +21,22 @@ function buildStatusBreakdown(groupedStatusRows) {
 }
 
 // GET /api/super-admin/dashboard/stats
-// Quick platform-wide overview statistics for Super Admin dashboard
 async function getPlatformStats(req, res, next) {
   try {
     const todayRange = getTodayRange();
 
-    const [
-      totalRestaurants,
-      activeRestaurants,
-      totalOrders,
-      todayOrders,
-      pendingOrders,
-      completedOrders,
-      recentRestaurants,
-    ] = await Promise.all([
+    const [totalRestaurants, activeRestaurants, totalOrders, todayOrders] = await Promise.all([
       prisma.restaurant.count(),
       prisma.restaurant.count({ where: { isActive: true } }),
       prisma.order.count(),
       prisma.order.count({
         where: { createdAt: { gte: todayRange.start, lte: todayRange.end } },
       }),
+    ]);
+
+    const [pendingOrders, readyOrders, recentRestaurants] = await Promise.all([
       prisma.order.count({ where: { status: 'PENDING' } }),
-      prisma.order.count({ where: { status: 'COMPLETED' } }),
+      prisma.order.count({ where: { status: 'READY' } }),
       prisma.restaurant.findMany({
         orderBy: { createdAt: 'desc' },
         take: 5,
@@ -68,7 +61,8 @@ async function getPlatformStats(req, res, next) {
         totalOrders,
         todayOrders,
         pendingOrders,
-        completedOrders,
+        readyOrders,
+        completedOrders: readyOrders,
       },
       recentRestaurants,
     });
@@ -78,7 +72,6 @@ async function getPlatformStats(req, res, next) {
 }
 
 // GET /api/super-admin/analytics/orders
-// In-depth platform order analytics with date range filtering and per-restaurant statistics
 async function getOrderAnalytics(req, res, next) {
   try {
     const { period, startDate, endDate } = req.query;
@@ -87,7 +80,6 @@ async function getOrderAnalytics(req, res, next) {
     const thisMonthRange = getThisMonthRange();
     const selectedRange = getDateRangeForPeriod(period, startDate, endDate);
 
-    // Filter condition for the requested period
     const periodWhere = {};
     if (selectedRange) {
       periodWhere.createdAt = { gte: selectedRange.start, lte: selectedRange.end };
@@ -99,12 +91,6 @@ async function getOrderAnalytics(req, res, next) {
       thisWeekOrdersCount,
       thisMonthOrdersCount,
       filteredOrdersCount,
-      filteredRevenueAgg,
-      groupedStatusRows,
-      restaurantsWithOrderCounts,
-      todayByRest,
-      pendingByRest,
-      completedByRest,
     ] = await Promise.all([
       prisma.order.count(),
       prisma.order.count({
@@ -117,6 +103,13 @@ async function getOrderAnalytics(req, res, next) {
         where: { createdAt: { gte: thisMonthRange.start, lte: thisMonthRange.end } },
       }),
       prisma.order.count({ where: periodWhere }),
+    ]);
+
+    const [
+      filteredRevenueAgg,
+      groupedStatusRows,
+      restaurantsWithOrderCounts,
+    ] = await Promise.all([
       prisma.order.aggregate({
         where: periodWhere,
         _sum: { totalAmount: true },
@@ -141,6 +134,9 @@ async function getOrderAnalytics(req, res, next) {
         },
         orderBy: { name: 'asc' },
       }),
+    ]);
+
+    const [todayByRest, pendingByRest, readyByRest] = await Promise.all([
       prisma.order.groupBy({
         by: ['restaurantId'],
         where: { createdAt: { gte: todayRange.start, lte: todayRange.end } },
@@ -153,14 +149,14 @@ async function getOrderAnalytics(req, res, next) {
       }),
       prisma.order.groupBy({
         by: ['restaurantId'],
-        where: { status: 'COMPLETED' },
+        where: { status: 'READY' },
         _count: { id: true },
       }),
     ]);
 
     const todayMap = new Map(todayByRest.map((r) => [r.restaurantId, r._count.id]));
     const pendingMap = new Map(pendingByRest.map((r) => [r.restaurantId, r._count.id]));
-    const completedMap = new Map(completedByRest.map((r) => [r.restaurantId, r._count.id]));
+    const readyMap = new Map(readyByRest.map((r) => [r.restaurantId, r._count.id]));
 
     const restaurantOrderStats = restaurantsWithOrderCounts.map((r) => ({
       id: r.id,
@@ -172,8 +168,21 @@ async function getOrderAnalytics(req, res, next) {
       totalOrders: r._count.orders,
       todayOrders: todayMap.get(r.id) || 0,
       pendingOrders: pendingMap.get(r.id) || 0,
-      completedOrders: completedMap.get(r.id) || 0,
+      readyOrders: readyMap.get(r.id) || 0,
+      completedOrders: readyMap.get(r.id) || 0,
     }));
+
+    const statusBreakdown = buildStatusBreakdown(groupedStatusRows);
+    const summary = {
+      totalOrders: totalOrdersAllTime,
+      todayOrders: todayOrdersCount,
+      thisWeekOrders: thisWeekOrdersCount,
+      thisMonthOrders: thisMonthOrdersCount,
+      filteredOrders: filteredOrdersCount,
+      filteredRevenue: filteredRevenueAgg._sum.totalAmount
+        ? filteredRevenueAgg._sum.totalAmount.toString()
+        : '0',
+    };
 
     res.status(200).json({
       success: true,
@@ -182,18 +191,14 @@ async function getOrderAnalytics(req, res, next) {
         startDate: selectedRange ? selectedRange.start : null,
         endDate: selectedRange ? selectedRange.end : null,
       },
-      summary: {
-        totalOrders: totalOrdersAllTime,
-        todayOrders: todayOrdersCount,
-        thisWeekOrders: thisWeekOrdersCount,
-        thisMonthOrders: thisMonthOrdersCount,
-        filteredOrders: filteredOrdersCount,
-        filteredRevenue: filteredRevenueAgg._sum.totalAmount
-          ? filteredRevenueAgg._sum.totalAmount.toString()
-          : '0',
-      },
-      statusBreakdown: buildStatusBreakdown(groupedStatusRows),
+      summary,
+      statusBreakdown,
       restaurants: restaurantOrderStats,
+      data: {
+        summary,
+        statusBreakdown,
+        restaurants: restaurantOrderStats,
+      },
     });
   } catch (err) {
     next(err);
@@ -201,7 +206,6 @@ async function getOrderAnalytics(req, res, next) {
 }
 
 // GET /api/super-admin/restaurants/:id/stats
-// Deep-dive statistics for a single restaurant
 async function getRestaurantStats(req, res, next) {
   try {
     const { id } = req.params;
@@ -217,6 +221,7 @@ async function getRestaurantStats(req, res, next) {
         address: true,
         whatsappNumber: true,
         isActive: true,
+        requireTableNumber: true,
         createdAt: true,
       },
     });
@@ -233,10 +238,6 @@ async function getRestaurantStats(req, res, next) {
       availableMenuItems,
       totalOrders,
       todayOrders,
-      pendingOrders,
-      completedOrders,
-      revenueAgg,
-      groupedStatusRows,
     ] = await Promise.all([
       prisma.category.count({ where: { restaurantId: id } }),
       prisma.menuItem.count({ where: { restaurantId: id } }),
@@ -248,8 +249,16 @@ async function getRestaurantStats(req, res, next) {
           createdAt: { gte: todayRange.start, lte: todayRange.end },
         },
       }),
+    ]);
+
+    const [
+      pendingOrders,
+      readyOrders,
+      revenueAgg,
+      groupedStatusRows,
+    ] = await Promise.all([
       prisma.order.count({ where: { restaurantId: id, status: 'PENDING' } }),
-      prisma.order.count({ where: { restaurantId: id, status: 'COMPLETED' } }),
+      prisma.order.count({ where: { restaurantId: id, status: 'READY' } }),
       prisma.order.aggregate({
         where: { restaurantId: id },
         _sum: { totalAmount: true },
@@ -272,7 +281,8 @@ async function getRestaurantStats(req, res, next) {
         totalOrders,
         todayOrders,
         pendingOrders,
-        completedOrders,
+        readyOrders,
+        completedOrders: readyOrders,
         totalRevenue: revenueAgg._sum.totalAmount
           ? revenueAgg._sum.totalAmount.toString()
           : '0',
@@ -289,4 +299,3 @@ module.exports = {
   getOrderAnalytics,
   getRestaurantStats,
 };
-

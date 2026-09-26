@@ -1,8 +1,5 @@
 import 'package:scanserve/shared/models/menu_item.dart';
 
-/// Public-safe restaurant info from GET /api/public/menu/:restaurantSlug.
-/// Deliberately slimmer than the admin-facing Restaurant model - no
-/// isActive, no email, nothing that isn't meant for a customer to see.
 class PublicRestaurant {
   const PublicRestaurant({
     required this.id,
@@ -11,6 +8,8 @@ class PublicRestaurant {
     required this.description,
     required this.phone,
     required this.address,
+    this.logoUrl,
+    this.requireTableNumber = true,
   });
 
   final String id;
@@ -19,23 +18,23 @@ class PublicRestaurant {
   final String description;
   final String phone;
   final String address;
+  final String? logoUrl;
+  final bool requireTableNumber;
 
   factory PublicRestaurant.fromJson(Map<String, dynamic> json) {
     return PublicRestaurant(
       id: json['id'] as String,
       name: json['name'] as String,
       slug: json['slug'] as String,
-      description: json['description'] as String? ?? '',
-      phone: json['phone'] as String? ?? '',
-      address: json['address'] as String? ?? '',
+      description: (json['description'] as String?) ?? '',
+      phone: (json['phone'] as String?) ?? '',
+      address: (json['address'] as String?) ?? '',
+      logoUrl: json['logoUrl'] as String?,
+      requireTableNumber: (json['requireTableNumber'] as bool?) ?? true,
     );
   }
 }
 
-/// A category with only its available items nested inline - matches the
-/// shape GET /api/public/menu/:restaurantSlug returns, built specifically
-/// for how the public menu screen renders (category sections, each
-/// holding the items to show under it).
 class PublicMenuCategory {
   const PublicMenuCategory({
     required this.id,
@@ -54,15 +53,17 @@ class PublicMenuCategory {
     return PublicMenuCategory(
       id: json['id'] as String,
       name: json['name'] as String,
-      description: json['description'] as String? ?? '',
+      description: (json['description'] as String?) ?? '',
       items: itemsJson.map(MenuItem.fromJson).toList(),
     );
   }
 }
 
-/// The full public menu payload: restaurant + its categories/items.
 class PublicMenu {
-  const PublicMenu({required this.restaurant, required this.categories});
+  const PublicMenu({
+    required this.restaurant,
+    required this.categories,
+  });
 
   final PublicRestaurant restaurant;
   final List<PublicMenuCategory> categories;

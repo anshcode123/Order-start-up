@@ -6,7 +6,7 @@ import 'package:scanserve/features/customer_menu/providers/cart_provider.dart';
 import 'package:scanserve/features/customer_menu/widgets/cart_conflict_dialog.dart';
 import 'package:scanserve/shared/models/menu_item.dart';
 
-class PublicMenuItemCard extends ConsumerWidget {
+class PublicMenuItemCard extends ConsumerStatefulWidget {
   const PublicMenuItemCard({
     super.key,
     required this.item,
@@ -18,22 +18,58 @@ class PublicMenuItemCard extends ConsumerWidget {
   final String restaurantSlug;
   final String restaurantName;
 
-  Future<void> _add(BuildContext context, WidgetRef ref) async {
-    final canProceed = await ensureCartMatchesRestaurant(context, ref, restaurantSlug: restaurantSlug);
+  @override
+  ConsumerState<PublicMenuItemCard> createState() => _PublicMenuItemCardState();
+}
+
+class _PublicMenuItemCardState extends ConsumerState<PublicMenuItemCard> {
+  String? _selectedVariantName;
+
+  List<MenuItemVariant> get _availableVariants =>
+      widget.item.variants.where((v) => v.isAvailable).toList();
+
+  MenuItemVariant? get _activeVariant {
+    if (!widget.item.hasVariants || _availableVariants.isEmpty) return null;
+    if (_selectedVariantName != null) {
+      final match = _availableVariants.where((v) => v.name == _selectedVariantName);
+      if (match.isNotEmpty) return match.first;
+    }
+    return _availableVariants.first;
+  }
+
+  Future<void> _add(BuildContext context, MenuItemVariant? variant) async {
+    final canProceed = await ensureCartMatchesRestaurant(
+      context,
+      ref,
+      restaurantSlug: widget.restaurantSlug,
+    );
     if (!canProceed) return;
     ref.read(cartProvider.notifier).addItem(
-          item,
-          restaurantSlug: restaurantSlug,
-          restaurantName: restaurantName,
+          widget.item,
+          restaurantSlug: widget.restaurantSlug,
+          restaurantName: widget.restaurantName,
+          variant: variant,
         );
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final activeVariant = _activeVariant;
+
     final quantity = ref.watch(cartProvider.select((cart) {
-      final match = cart.items.where((c) => c.menuItemId == item.id);
+      final match = cart.items.where(
+        (c) => c.matchesLine(
+          item.id,
+          targetVariantId: activeVariant?.id,
+          targetVariantName: activeVariant?.name,
+        ),
+      );
       return match.isEmpty ? 0 : match.first.quantity;
     }));
+
+    final displayPrice =
+        activeVariant != null ? activeVariant.formattedPrice : item.formattedPrice;
 
     return Container(
       decoration: BoxDecoration(
@@ -74,19 +110,47 @@ class PublicMenuItemCard extends ConsumerWidget {
                         child: Text(
                           item.description,
                           style: AppTextStyles.bodySmall,
-                          maxLines: 2,
+                          maxLines: item.hasVariants ? 1 : 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     )
                   else
                     const Spacer(),
+                  if (item.hasVariants && _availableVariants.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        for (final v in _availableVariants)
+                          ChoiceChip(
+                            label: Text('${v.name} ${v.formattedPrice}'),
+                            selected: activeVariant?.name == v.name,
+                            onSelected: (_) => setState(() => _selectedVariantName = v.name),
+                            visualDensity: VisualDensity.compact,
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                            selectedColor: AppColors.primaryLight,
+                            labelStyle: AppTextStyles.bodySmall.copyWith(
+                              fontSize: 11,
+                              fontWeight: activeVariant?.name == v.name
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: activeVariant?.name == v.name
+                                  ? AppColors.primaryDark
+                                  : AppColors.textSecondary,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 6),
                   Row(
                     children: [
                       Expanded(
                         child: Text(
-                          item.formattedPrice,
+                          displayPrice,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.title.copyWith(
@@ -97,7 +161,7 @@ class PublicMenuItemCard extends ConsumerWidget {
                       ),
                       if (quantity == 0)
                         FilledButton(
-                          onPressed: () => _add(context, ref),
+                          onPressed: () => _add(context, activeVariant),
                           style: FilledButton.styleFrom(
                             backgroundColor: AppColors.primary,
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -108,8 +172,16 @@ class PublicMenuItemCard extends ConsumerWidget {
                       else
                         _QuantityStepper(
                           quantity: quantity,
-                          onIncrement: () => ref.read(cartProvider.notifier).incrementItem(item.id),
-                          onDecrement: () => ref.read(cartProvider.notifier).decrementItem(item.id),
+                          onIncrement: () => ref.read(cartProvider.notifier).incrementItem(
+                                item.id,
+                                variantId: activeVariant?.id,
+                                variantName: activeVariant?.name,
+                              ),
+                          onDecrement: () => ref.read(cartProvider.notifier).decrementItem(
+                                item.id,
+                                variantId: activeVariant?.id,
+                                variantName: activeVariant?.name,
+                              ),
                         ),
                     ],
                   ),

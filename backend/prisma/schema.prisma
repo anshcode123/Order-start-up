@@ -19,9 +19,13 @@ enum OrderStatus {
   ACCEPTED
   PREPARING
   READY
-  COMPLETED
   CANCELLED
   REJECTED
+}
+
+enum DiningType {
+  DINE_IN
+  TAKEAWAY
 }
 
 enum BillingInterval {
@@ -38,18 +42,19 @@ enum SubscriptionStatus {
 }
 
 model Restaurant {
-  id             String   @id @default(uuid())
-  name           String
-  slug           String   @unique
-  description    String   @default("")
-  phone          String   @default("")
-  email          String   @default("")
-  address        String   @default("")
-  whatsappNumber String   @default("") @map("whatsapp_number")
-  logoUrl        String?  @map("logo_url")
-  isActive       Boolean  @default(true) @map("is_active")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id                 String   @id @default(uuid())
+  name               String
+  slug               String   @unique
+  description        String   @default("")
+  phone              String   @default("")
+  email              String   @default("")
+  address            String   @default("")
+  whatsappNumber     String   @default("") @map("whatsapp_number")
+  logoUrl            String?  @map("logo_url")
+  isActive           Boolean  @default(true) @map("is_active")
+  requireTableNumber Boolean  @default(true) @map("require_table_number")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   admins       User[]
   categories   Category[]
@@ -102,12 +107,14 @@ model MenuItem {
   category     Category   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   name         String
   description  String     @default("")
-  price        Decimal    @db.Decimal(10, 2)
+  price        Decimal    @default(0) @db.Decimal(10, 2)
+  hasVariants  Boolean    @default(false) @map("has_variants")
   imageUrl     String?    @map("image_url")
   isAvailable  Boolean    @default(true) @map("is_available")
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
 
+  variants   MenuItemVariant[]
   orderItems OrderItem[]
 
   @@index([restaurantId])
@@ -116,11 +123,28 @@ model MenuItem {
   @@map("menu_items")
 }
 
+model MenuItemVariant {
+  id          String   @id @default(uuid())
+  menuItemId  String   @map("menu_item_id")
+  menuItem    MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  name        String
+  price       Decimal  @db.Decimal(10, 2)
+  sortOrder   Int      @default(0) @map("sort_order")
+  isAvailable Boolean  @default(true) @map("is_available")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([menuItemId, name])
+  @@index([menuItemId])
+  @@map("menu_item_variants")
+}
+
 model Order {
   id           String      @id @default(uuid())
   restaurantId String      @map("restaurant_id")
   restaurant   Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  tableNumber  String      @map("table_number")
+  diningType   DiningType  @default(DINE_IN) @map("dining_type")
+  tableNumber  String?     @map("table_number")
   status       OrderStatus @default(PENDING)
   totalAmount  Decimal     @db.Decimal(10, 2) @map("total_amount")
   publicToken  String      @unique @map("public_token")
@@ -136,16 +160,18 @@ model Order {
 }
 
 model OrderItem {
-  id         String    @id @default(uuid())
-  orderId    String    @map("order_id")
-  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  menuItemId String?   @map("menu_item_id")
-  menuItem   MenuItem? @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
-  itemName   String    @map("item_name")
-  unitPrice  Decimal   @db.Decimal(10, 2) @map("unit_price")
-  quantity   Int
-  subtotal   Decimal   @db.Decimal(10, 2)
-  createdAt  DateTime  @default(now()) @map("created_at")
+  id          String    @id @default(uuid())
+  orderId     String    @map("order_id")
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId  String?   @map("menu_item_id")
+  menuItem    MenuItem? @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+  itemName    String    @map("item_name")
+  variantId   String?   @map("variant_id")
+  variantName String?   @map("variant_name")
+  unitPrice   Decimal   @db.Decimal(10, 2) @map("unit_price")
+  quantity    Int
+  subtotal    Decimal   @db.Decimal(10, 2)
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   @@index([orderId])
   @@index([menuItemId])

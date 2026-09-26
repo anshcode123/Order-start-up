@@ -1,14 +1,24 @@
 const prisma = require('../lib/prisma');
 
 function serializePublicMenuItem(item) {
+  const variants = Array.isArray(item.variants)
+    ? item.variants.map((v) => ({
+        id: v.id,
+        menuItemId: v.menuItemId,
+        name: v.name,
+        price: v.price.toString(),
+        sortOrder: v.sortOrder,
+        isAvailable: v.isAvailable,
+      }))
+    : [];
+
   return {
     id: item.id,
     name: item.name,
     description: item.description,
-    // Same pattern as the admin-facing serializer in
-    // controllers/menuItemController.js: Decimal -> string, never a
-    // float, so the client never round-trips currency through a double.
     price: item.price.toString(),
+    hasVariants: Boolean(item.hasVariants),
+    variants,
     imageUrl: item.imageUrl,
     categoryId: item.categoryId,
   };
@@ -23,10 +33,6 @@ async function getPublicMenu(req, res, next) {
 
     const restaurant = await prisma.restaurant.findUnique({ where: { slug: restaurantSlug } });
 
-    // Same 404 for "doesn't exist" and "exists but inactive" - a
-    // disabled restaurant's menu must not be distinguishable from one
-    // that was never there (Phase 5 spec: "Do not expose inactive
-    // restaurants through the public menu").
     if (!restaurant || !restaurant.isActive) {
       return res.status(404).json({
         success: false,
@@ -34,8 +40,6 @@ async function getPublicMenu(req, res, next) {
       });
     }
 
-    // restaurantId is derived from the slug above - never accepted from
-    // the client - so this can never leak another restaurant's data.
     const categories = await prisma.category.findMany({
       where: { restaurantId: restaurant.id },
       orderBy: { name: 'asc' },
@@ -43,22 +47,30 @@ async function getPublicMenu(req, res, next) {
         menuItems: {
           where: { isAvailable: true },
           orderBy: { name: 'asc' },
+          include: {
+            variants: {
+              where: { isAvailable: true },
+              orderBy: { sortOrder: 'asc' },
+            },
+          },
         },
       },
     });
 
-    // Drop categories that end up with no available items - an empty
-    // category tab a customer can tap into with nothing inside it is
-    // just confusing, and the spec only ever asks to display available
-    // items grouped by category, not empty categories for their own sake.
-    const categoriesWithItems = categories.filter((category) => category.menuItems.length > 0);
+    const formattedCategories = categories
+      .map((category) => {
+        const availableItems = category.menuItems.filter(
+          (item) => !item.hasVariants || (Array.isArray(item.variants) && item.variants.length > 0)
+        );
+        return {
+          id: category.id,
+          name: category.name,
+          description: category.description,
+          items: availableItems.map(serializePublicMenuItem),
+        };
+      })
+      .filter((category) => category.items.length > 0);
 
-    const formattedCategories = categoriesWithItems.map((category) => ({
-      id: category.id,
-      name: category.name,
-      description: category.description,
-      items: category.menuItems.map(serializePublicMenuItem),
-    }));
     const formattedRestaurant = {
       id: restaurant.id,
       name: restaurant.name,
@@ -66,6 +78,9 @@ async function getPublicMenu(req, res, next) {
       description: restaurant.description,
       phone: restaurant.phone,
       address: restaurant.address,
+      logoUrl: restaurant.logoUrl || null,
+      requireTableNumber:
+        restaurant.requireTableNumber === undefined ? true : Boolean(restaurant.requireTableNumber),
     };
 
     res.status(200).json({

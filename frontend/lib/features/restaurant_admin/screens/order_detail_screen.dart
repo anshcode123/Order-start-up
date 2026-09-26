@@ -11,12 +11,6 @@ import 'package:scanserve/shared/models/order_status.dart';
 import 'package:scanserve/shared/models/restaurant_order.dart';
 import 'package:scanserve/shared/widgets/app_dialogs.dart';
 
-/// /dashboard/orders/:id - full order detail + status update controls
-/// (Phase 6 spec #13, #14). The backend is still the real enforcement
-/// point for valid transitions; this screen only offers buttons for
-/// transitions that are already known-valid, so a rejected request here
-/// would only ever mean the two sides drifted, not that the UI is the
-/// source of truth.
 class OrderDetailScreen extends ConsumerStatefulWidget {
   const OrderDetailScreen({super.key, required this.orderId});
 
@@ -109,9 +103,17 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           ),
           child: Row(
             children: [
-              const Icon(Icons.table_bar_outlined, color: AppColors.primaryDark),
+              Icon(
+                order.diningType == 'TAKEAWAY'
+                    ? Icons.takeout_dining_outlined
+                    : Icons.table_bar_outlined,
+                color: AppColors.primaryDark,
+              ),
               const SizedBox(width: 8),
-              Text('Table ${order.tableNumber}', style: AppTextStyles.title.copyWith(fontSize: 16)),
+              Text(
+                order.diningSummary,
+                style: AppTextStyles.title.copyWith(fontSize: 16),
+              ),
             ],
           ),
         ),
@@ -133,19 +135,25 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text(item.itemName, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary)),
+                        child: Text(
+                          item.displayName,
+                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary),
+                        ),
                       ),
                       Text(
-                        '${item.quantity} × ${item.unitPrice}',
+                        '${item.quantity} × ₹${item.unitPrice}',
                         style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
                       ),
                       const SizedBox(width: 12),
                       SizedBox(
-                        width: 70,
+                        width: 80,
                         child: Text(
-                          item.subtotal,
+                          '₹${item.subtotal}',
                           textAlign: TextAlign.right,
-                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],
@@ -156,7 +164,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                 children: [
                   const Text('Total', style: AppTextStyles.title),
                   const Spacer(),
-                  Text(order.total, style: AppTextStyles.title.copyWith(color: AppColors.primaryDark)),
+                  Text(
+                    '₹${order.total}',
+                    style: AppTextStyles.title.copyWith(color: AppColors.primaryDark),
+                  ),
                 ],
               ),
             ],
@@ -184,7 +195,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           ),
         ] else
           Text(
-            'This order is in a final state and cannot be changed further.',
+            'This order is in a final state (Ready / Cancelled / Rejected) and cannot be changed further.',
             style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
           ),
       ],

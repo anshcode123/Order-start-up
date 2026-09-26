@@ -295,7 +295,7 @@ class _SuperAdminAnalyticsScreenState
                               DataColumn(label: Text("Today's"), numeric: true),
                               DataColumn(label: Text('Pending'), numeric: true),
                               DataColumn(
-                                  label: Text('Completed'), numeric: true),
+                                  label: Text('Ready'), numeric: true),
                               DataColumn(label: Text('Actions')),
                             ],
                             rows: [

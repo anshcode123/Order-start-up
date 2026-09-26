@@ -1,6 +1,7 @@
 const prisma = require('../lib/prisma');
 const {
   ORDER_STATUSES,
+  DINING_TYPES,
   isValidTransition,
   serializeOrderItem,
   deriveOrderNumber,
@@ -12,7 +13,8 @@ function serializeOrder(order) {
     id: order.id,
     publicToken: order.publicToken,
     orderNumber: deriveOrderNumber(order.publicToken),
-    tableNumber: order.tableNumber,
+    diningType: order.diningType || 'DINE_IN',
+    tableNumber: order.tableNumber || null,
     status: order.status,
     items: order.items ? order.items.map(serializeOrderItem) : [],
     total: order.totalAmount ? order.totalAmount.toString() : '0',
@@ -24,7 +26,7 @@ function serializeOrder(order) {
 
 async function getOrders(req, res, next) {
   try {
-    const { status, search } = req.query;
+    const { status, diningType, search } = req.query;
 
     const where = { restaurantId: req.user.restaurantId };
     if (status && status.toUpperCase() !== 'ALL') {
@@ -36,6 +38,17 @@ async function getOrders(req, res, next) {
         });
       }
       where.status = upper;
+    }
+
+    if (diningType && diningType.toUpperCase() !== 'ALL') {
+      const upperDining = diningType.toUpperCase();
+      if (!DINING_TYPES.includes(upperDining)) {
+        return res.status(400).json({
+          success: false,
+          message: `diningType must be one of: ${DINING_TYPES.join(', ')}`,
+        });
+      }
+      where.diningType = upperDining;
     }
 
     if (search && typeof search === 'string') {
@@ -122,6 +135,8 @@ async function updateOrderStatus(req, res, next) {
     emitToRestaurant(updated.restaurantId, 'order:status_updated', {
       orderId: updated.id,
       publicOrderReference: updated.publicToken,
+      diningType: updated.diningType || 'DINE_IN',
+      tableNumber: updated.tableNumber || null,
       status: updated.status,
       updatedAt: updated.updatedAt,
     });
@@ -129,7 +144,8 @@ async function updateOrderStatus(req, res, next) {
       orderId: updated.publicToken,
       orderNumber: deriveOrderNumber(updated.publicToken),
       restaurantName: updated.restaurant ? updated.restaurant.name : undefined,
-      tableNumber: updated.tableNumber,
+      diningType: updated.diningType || 'DINE_IN',
+      tableNumber: updated.tableNumber || null,
       status: updated.status,
       items: updated.items.map(serializeOrderItem),
       total: updated.totalAmount.toString(),

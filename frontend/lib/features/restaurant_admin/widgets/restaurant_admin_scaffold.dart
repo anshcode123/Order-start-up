@@ -36,7 +36,7 @@ class RestaurantAdminScaffold extends ConsumerWidget {
       if (next == null) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('New order received — Table ${next.tableNumber}'),
+          content: Text('New order received — ${next.diningSummary}'),
           backgroundColor: AppColors.primary,
           action: SnackBarAction(
             label: 'View',

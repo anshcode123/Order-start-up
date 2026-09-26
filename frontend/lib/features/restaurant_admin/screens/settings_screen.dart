@@ -34,6 +34,7 @@ class _RestaurantAdminSettingsScreenState
   String? _slug;
   String? _logoUrl;
   bool _isActive = true;
+  bool _requireTableNumber = true;
   bool _hydrated = false;
   bool _isSaving = false;
   bool _isUploadingLogo = false;
@@ -60,6 +61,7 @@ class _RestaurantAdminSettingsScreenState
     _slug = settings['slug'] as String?;
     _logoUrl = settings['logoUrl'] as String?;
     _isActive = (settings['isActive'] as bool?) ?? true;
+    _requireTableNumber = (settings['requireTableNumber'] as bool?) ?? true;
     _hydrated = true;
   }
 
@@ -120,6 +122,7 @@ class _RestaurantAdminSettingsScreenState
         'whatsappNumber': _whatsAppController.text.trim(),
         'logoUrl': _logoUrl,
         'isActive': _isActive,
+        'requireTableNumber': _requireTableNumber,
       });
 
       ref.invalidate(restaurantSettingsProvider);
@@ -343,6 +346,23 @@ class _RestaurantAdminSettingsScreenState
                             ),
                             value: _isActive,
                             onChanged: (val) => setState(() => _isActive = val),
+                            activeThumbColor: AppColors.primary,
+                          ),
+                        ),
+                        const Divider(height: 24, color: AppColors.border),
+                        Material(
+                          color: Colors.transparent,
+                          child: SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text('Require Table Number', style: _labelStyle),
+                            subtitle: Text(
+                              'When enabled, customers selecting Dine In must enter a table number. Takeaway orders never require a table number.',
+                              style: AppTextStyles.bodySmall
+                                  .copyWith(color: AppColors.textMuted),
+                            ),
+                            value: _requireTableNumber,
+                            onChanged: (val) =>
+                                setState(() => _requireTableNumber = val),
                             activeThumbColor: AppColors.primary,
                           ),
                         ),

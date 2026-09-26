@@ -230,7 +230,7 @@ class _RestaurantDetailScreenState
                               accentColor: Colors.orange.shade800,
                             ),
                             StatCard(
-                              label: 'Completed Orders',
+                              label: 'Ready Orders',
                               value: stats.completedOrders,
                               icon: Icons.done_all_outlined,
                               accentColor: AppColors.success,

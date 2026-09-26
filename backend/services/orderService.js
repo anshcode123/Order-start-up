@@ -13,7 +13,6 @@ const ORDER_STATUSES = [
   'ACCEPTED',
   'PREPARING',
   'READY',
-  'COMPLETED',
   'CANCELLED',
   'REJECTED',
 ];
@@ -22,11 +21,12 @@ const ALLOWED_TRANSITIONS = {
   PENDING: ['ACCEPTED', 'REJECTED', 'CANCELLED'],
   ACCEPTED: ['PREPARING', 'CANCELLED'],
   PREPARING: ['READY', 'CANCELLED'],
-  READY: ['COMPLETED'],
-  COMPLETED: [],
+  READY: [],
   CANCELLED: [],
   REJECTED: [],
 };
+
+const DINING_TYPES = ['DINE_IN', 'TAKEAWAY'];
 
 function apiError(statusCode, message) {
   const err = new Error(message);
@@ -52,6 +52,37 @@ function validateTableNumber(rawValue) {
   return tableNumber;
 }
 
+function resolveDiningAndTable({ rawDiningType, rawTableNumber, requireTableNumber }) {
+  let diningType = 'DINE_IN';
+  if (rawDiningType !== undefined && rawDiningType !== null && String(rawDiningType).trim() !== '') {
+    const normalized = String(rawDiningType).trim().toUpperCase();
+    if (!DINING_TYPES.includes(normalized)) {
+      throw apiError(400, `diningType must be one of: ${DINING_TYPES.join(', ')}`);
+    }
+    diningType = normalized;
+  }
+
+  if (diningType === 'TAKEAWAY') {
+    return { diningType: 'TAKEAWAY', tableNumber: null };
+  }
+
+  // DINE_IN
+  const trimmedTable = typeof rawTableNumber === 'string' ? rawTableNumber.trim() : '';
+  if (trimmedTable.length > TABLE_NUMBER_MAX_LENGTH) {
+    throw apiError(400, `Table number must be ${TABLE_NUMBER_MAX_LENGTH} characters or fewer`);
+  }
+
+  const mustHaveTable = requireTableNumber === undefined ? true : Boolean(requireTableNumber);
+  if (mustHaveTable && !trimmedTable) {
+    throw apiError(400, 'Table number is required for Dine In orders');
+  }
+
+  return {
+    diningType: 'DINE_IN',
+    tableNumber: trimmedTable || null,
+  };
+}
+
 function generatePublicToken() {
   return crypto.randomBytes(24).toString('base64url');
 }
@@ -65,29 +96,42 @@ function serializeOrderItem(item) {
     id: item.id,
     menuItemId: item.menuItemId,
     itemName: item.itemName,
+    variantId: item.variantId || null,
+    variantName: item.variantName || null,
     unitPrice: item.unitPrice.toString(),
     quantity: item.quantity,
     subtotal: item.subtotal.toString(),
   };
 }
 
+function lineSignature(item) {
+  return `${item.menuItemId || ''}::${item.variantId || ''}::${item.variantName || ''}`;
+}
+
 function isDuplicateCart(existingItems, newLines) {
   if (!existingItems || existingItems.length !== newLines.length) return false;
   const sortedExisting = [...existingItems].sort((a, b) =>
-    (a.menuItemId || '').localeCompare(b.menuItemId || '')
+    lineSignature(a).localeCompare(lineSignature(b))
   );
   const sortedNew = [...newLines].sort((a, b) =>
-    (a.menuItemId || '').localeCompare(b.menuItemId || '')
+    lineSignature(a).localeCompare(lineSignature(b))
   );
 
   for (let i = 0; i < sortedExisting.length; i++) {
     if (sortedExisting[i].menuItemId !== sortedNew[i].menuItemId) return false;
+    if ((sortedExisting[i].variantId || null) !== (sortedNew[i].variantId || null)) return false;
+    if ((sortedExisting[i].variantName || null) !== (sortedNew[i].variantName || null)) return false;
     if (sortedExisting[i].quantity !== sortedNew[i].quantity) return false;
   }
   return true;
 }
 
-async function createOrderFromCart({ restaurantSlug, tableNumber: rawTableNumber, items }) {
+async function createOrderFromCart({
+  restaurantSlug,
+  diningType: rawDiningType,
+  tableNumber: rawTableNumber,
+  items,
+}) {
   if (!restaurantSlug || typeof restaurantSlug !== 'string') {
     throw apiError(400, 'restaurantSlug is required');
   }
@@ -103,7 +147,11 @@ async function createOrderFromCart({ restaurantSlug, tableNumber: rawTableNumber
   await assertActiveSubscription(restaurant.id);
   await checkOrderLimit(restaurant.id);
 
-  const tableNumber = validateTableNumber(rawTableNumber);
+  const { diningType, tableNumber } = resolveDiningAndTable({
+    rawDiningType,
+    rawTableNumber,
+    requireTableNumber: restaurant.requireTableNumber,
+  });
 
   if (!Array.isArray(items) || items.length === 0) {
     throw apiError(400, 'Your cart is empty');
@@ -122,8 +170,11 @@ async function createOrderFromCart({ restaurantSlug, tableNumber: rawTableNumber
     }
   }
 
-  const menuItemIds = items.map((line) => line.menuItemId);
-  const menuItems = await prisma.menuItem.findMany({ where: { id: { in: menuItemIds } } });
+  const menuItemIds = [...new Set(items.map((line) => line.menuItemId))];
+  const menuItems = await prisma.menuItem.findMany({
+    where: { id: { in: menuItemIds } },
+    include: { variants: true },
+  });
   const menuItemById = new Map(menuItems.map((item) => [item.id, item]));
 
   const orderLines = items.map((line) => {
@@ -137,12 +188,54 @@ async function createOrderFromCart({ restaurantSlug, tableNumber: rawTableNumber
     }
 
     const quantity = Number(line.quantity);
-    const subtotal = menuItem.price.mul(quantity);
+    const hasVariantIdInput =
+      line.variantId !== undefined && line.variantId !== null && String(line.variantId).trim() !== '';
+    const hasVariantNameInput =
+      line.variantName !== undefined && line.variantName !== null && String(line.variantName).trim() !== '';
+
+    let unitPrice = menuItem.price;
+    let resolvedVariantId = null;
+    let resolvedVariantName = null;
+
+    if (menuItem.hasVariants) {
+      if (!hasVariantIdInput && !hasVariantNameInput) {
+        throw apiError(400, `Please select Half or Full for ${menuItem.name}.`);
+      }
+
+      const itemVariants = Array.isArray(menuItem.variants) ? menuItem.variants : [];
+      let matchedVariant = null;
+
+      if (hasVariantIdInput) {
+        matchedVariant = itemVariants.find((v) => v.id === String(line.variantId).trim());
+      } else if (hasVariantNameInput) {
+        const targetName = String(line.variantName).trim().toLowerCase();
+        matchedVariant = itemVariants.find((v) => v.name.toLowerCase() === targetName);
+      }
+
+      if (!matchedVariant || matchedVariant.menuItemId !== menuItem.id) {
+        throw apiError(400, `Invalid variant selected for ${menuItem.name}.`);
+      }
+      if (!matchedVariant.isAvailable) {
+        throw apiError(400, `${menuItem.name} (${matchedVariant.name}) is currently unavailable.`);
+      }
+
+      unitPrice = matchedVariant.price;
+      resolvedVariantId = matchedVariant.id;
+      resolvedVariantName = matchedVariant.name;
+    } else {
+      if (hasVariantIdInput || hasVariantNameInput) {
+        throw apiError(400, `${menuItem.name} does not support size variants.`);
+      }
+    }
+
+    const subtotal = unitPrice.mul(quantity);
 
     return {
       menuItemId: menuItem.id,
       itemName: menuItem.name,
-      unitPrice: menuItem.price,
+      variantId: resolvedVariantId,
+      variantName: resolvedVariantName,
+      unitPrice,
       quantity,
       subtotal,
     };
@@ -160,6 +253,7 @@ async function createOrderFromCart({ restaurantSlug, tableNumber: rawTableNumber
   const recentOrder = await prisma.order.findFirst({
     where: {
       restaurantId: restaurant.id,
+      diningType,
       tableNumber,
       createdAt: { gte: cutoffTime },
       status: 'PENDING',
@@ -181,6 +275,7 @@ async function createOrderFromCart({ restaurantSlug, tableNumber: rawTableNumber
     const createdOrder = await tx.order.create({
       data: {
         restaurantId: restaurant.id,
+        diningType,
         tableNumber,
         status: 'PENDING',
         totalAmount,
@@ -200,6 +295,8 @@ async function createOrderFromCart({ restaurantSlug, tableNumber: rawTableNumber
   const eventPayload = {
     orderId: order.id,
     publicOrderReference: order.publicToken,
+    orderNumber: deriveOrderNumber(order.publicToken),
+    diningType: order.diningType,
     tableNumber: order.tableNumber,
     items: order.items.map(serializeOrderItem),
     totalAmount: order.totalAmount.toString(),
@@ -208,6 +305,7 @@ async function createOrderFromCart({ restaurantSlug, tableNumber: rawTableNumber
     order: {
       id: order.id,
       restaurantId: restaurant.id,
+      diningType: order.diningType,
       tableNumber: order.tableNumber,
       status: order.status,
       totalAmount: order.totalAmount.toString(),
@@ -231,8 +329,10 @@ async function createOrderFromCart({ restaurantSlug, tableNumber: rawTableNumber
 module.exports = {
   ORDER_STATUSES,
   ALLOWED_TRANSITIONS,
+  DINING_TYPES,
   isValidTransition,
   validateTableNumber,
+  resolveDiningAndTable,
   generatePublicToken,
   deriveOrderNumber,
   serializeOrderItem,

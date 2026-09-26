@@ -499,7 +499,7 @@ async function runPhase12Tests() {
     { status: 'COMPLETED' },
     ra2Token
   );
-  assert(statusComp.status === 200 && statusComp.body?.order?.status === 'COMPLETED', 'Order status transitions READY -> COMPLETED');
+  assert(statusComp.status === 400, 'Removed COMPLETED order status is rejected with 400 (READY is final)');
 
   const statusInvalid = await request(
     'PATCH',

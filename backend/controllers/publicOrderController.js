@@ -13,7 +13,8 @@ function serializePublicOrder(order) {
     orderNumber: deriveOrderNumber(order.publicToken),
     restaurantId: order.restaurantId,
     restaurantName: order.restaurant ? order.restaurant.name : undefined,
-    tableNumber: order.tableNumber,
+    diningType: order.diningType || 'DINE_IN',
+    tableNumber: order.tableNumber || null,
     status: order.status,
     items: order.items.map(serializeOrderItem),
     total: order.totalAmount.toString(),
@@ -24,9 +25,14 @@ function serializePublicOrder(order) {
 
 async function createOrder(req, res, next) {
   try {
-    const { restaurantSlug, tableNumber, items } = req.body;
+    const { restaurantSlug, diningType, tableNumber, items } = req.body;
 
-    const order = await createOrderFromCart({ restaurantSlug, tableNumber, items });
+    const order = await createOrderFromCart({
+      restaurantSlug,
+      diningType,
+      tableNumber,
+      items,
+    });
     const serialized = serializePublicOrder(order);
 
     let whatsappNotification = null;

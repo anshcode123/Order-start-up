@@ -10,9 +10,8 @@ import 'package:scanserve/features/restaurant_admin/providers/order_providers.da
 import 'package:scanserve/features/restaurant_admin/widgets/order_status_chip.dart';
 import 'package:scanserve/shared/models/restaurant_order.dart';
 
-/// /dashboard/orders - incoming orders for the logged-in Restaurant
-/// Admin's own restaurant, split into tabs. Live via restaurantOrdersProvider,
-/// which is patched in real-time by socket events.
+/// /dashboard/orders - incoming orders for the logged-in Restaurant Admin.
+/// Phase 13 removes COMPLETED so READY is the final completed tab.
 class OrdersScreen extends ConsumerStatefulWidget {
   const OrdersScreen({super.key});
 
@@ -26,7 +25,6 @@ const _tabs = [
   (label: 'Accepted', statuses: ['ACCEPTED']),
   (label: 'Preparing', statuses: ['PREPARING']),
   (label: 'Ready', statuses: ['READY']),
-  (label: 'Completed', statuses: ['COMPLETED']),
   (label: 'Cancelled', statuses: ['CANCELLED', 'REJECTED']),
 ];
 
@@ -35,6 +33,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
   late final TabController _tabController;
   final _searchController = TextEditingController();
   String _searchQuery = '';
+  String _diningFilter = 'ALL';
 
   @override
   void initState() {
@@ -49,13 +48,17 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
     super.dispose();
   }
 
-  bool _matchesSearch(RestaurantOrder order) {
+  bool _matchesFilters(RestaurantOrder order) {
+    if (_diningFilter != 'ALL' && order.diningType != _diningFilter) {
+      return false;
+    }
     if (_searchQuery.isEmpty) return true;
     final q = _searchQuery.toLowerCase();
-    if (order.tableNumber.toLowerCase().contains(q)) return true;
+    if ((order.tableNumber ?? '').toLowerCase().contains(q)) return true;
+    if (order.diningLabel.toLowerCase().contains(q)) return true;
     if (order.id.toLowerCase().contains(q)) return true;
     for (final item in order.items) {
-      if (item.itemName.toLowerCase().contains(q)) return true;
+      if (item.displayName.toLowerCase().contains(q)) return true;
     }
     return false;
   }
@@ -104,30 +107,55 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
             padding: EdgeInsets.symmetric(
               horizontal: Responsive.pagePadding(context),
             ),
-            child: TextField(
-              controller: _searchController,
-              onChanged: (val) => setState(() => _searchQuery = val.trim()),
-              decoration: InputDecoration(
-                hintText: 'Search by table number, order #, or item...',
-                prefixIcon: const Icon(Icons.search, size: 20),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear, size: 18),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _searchQuery = '');
-                        },
-                      )
-                    : null,
-                filled: true,
-                fillColor: AppColors.surface,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: AppColors.border),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SizedBox(
+                  width: 320,
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (val) => setState(() => _searchQuery = val.trim()),
+                    decoration: InputDecoration(
+                      hintText: 'Search by table, order #, or item...',
+                      prefixIcon: const Icon(Icons.search, size: 20),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 18),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _searchQuery = '');
+                              },
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: AppColors.surface,
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                ChoiceChip(
+                  label: const Text('All Types'),
+                  selected: _diningFilter == 'ALL',
+                  onSelected: (_) => setState(() => _diningFilter = 'ALL'),
+                ),
+                ChoiceChip(
+                  label: const Text('Dine In'),
+                  selected: _diningFilter == 'DINE_IN',
+                  onSelected: (_) => setState(() => _diningFilter = 'DINE_IN'),
+                ),
+                ChoiceChip(
+                  label: const Text('Takeaway'),
+                  selected: _diningFilter == 'TAKEAWAY',
+                  onSelected: (_) => setState(() => _diningFilter = 'TAKEAWAY'),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 12),
@@ -144,7 +172,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
               ),
             ),
             data: (allOrders) {
-              final filteredOrders = allOrders.where(_matchesSearch).toList();
+              final filteredOrders = allOrders.where(_matchesFilters).toList();
               return Expanded(
                 child: Column(
                   children: [
@@ -172,8 +200,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
                               orders: tab.statuses.isEmpty
                                   ? filteredOrders
                                   : filteredOrders
-                                      .where((o) =>
-                                          tab.statuses.contains(o.status))
+                                      .where((o) => tab.statuses.contains(o.status))
                                       .toList(),
                               emptyLabel: _searchQuery.isNotEmpty
                                   ? 'No orders found matching "$_searchQuery"'
@@ -272,7 +299,7 @@ class _OrderCard extends ConsumerWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Table ${order.tableNumber} · ${order.totalQuantity} item(s)',
+              '${order.diningSummary} · ${order.totalQuantity} item(s)',
               style:
                   AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
             ),
@@ -284,13 +311,13 @@ class _OrderCard extends ConsumerWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        '${item.quantity} × ${item.itemName}',
+                        '${item.quantity} × ${item.displayName}',
                         style: AppTextStyles.bodySmall
                             .copyWith(color: AppColors.textPrimary),
                       ),
                     ),
                     Text(
-                      item.subtotal,
+                      '₹${item.subtotal}',
                       style: AppTextStyles.bodySmall
                           .copyWith(color: AppColors.textPrimary),
                     ),
@@ -304,7 +331,7 @@ class _OrderCard extends ConsumerWidget {
                     style: AppTextStyles.title.copyWith(fontSize: 14)),
                 const Spacer(),
                 Text(
-                  order.total,
+                  '₹${order.total}',
                   style: AppTextStyles.title.copyWith(
                     color: AppColors.primaryDark,
                     fontSize: 14,

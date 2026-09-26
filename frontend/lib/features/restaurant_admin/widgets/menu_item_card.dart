@@ -56,12 +56,17 @@ class MenuItemCard extends StatelessWidget {
                 ),
                 if (item.description.isNotEmpty) ...[
                   const SizedBox(height: 4),
-                  Text(item.description, style: AppTextStyles.bodySmall, maxLines: 2, overflow: TextOverflow.ellipsis),
+                  Text(
+                    item.description,
+                    style: AppTextStyles.bodySmall,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
                 const SizedBox(height: 6),
                 Text(
-                  item.formattedPrice,
-                  style: AppTextStyles.title.copyWith(color: AppColors.primaryDark, fontSize: 16),
+                  item.formattedPriceSummary,
+                  style: AppTextStyles.title.copyWith(color: AppColors.primaryDark, fontSize: 15),
                 ),
                 const SizedBox(height: 12),
                 Wrap(

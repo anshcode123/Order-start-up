@@ -3,68 +3,125 @@ import 'package:scanserve/features/customer_menu/state/cart_state.dart';
 import 'package:scanserve/shared/models/cart_item.dart';
 import 'package:scanserve/shared/models/menu_item.dart';
 
-/// In-memory cart for the anonymous customer flow (Phase 5). No
-/// persistence, no backend calls, no auth token - this is plain
-/// Riverpod client state, cleared on page reload by design (the spec
-/// allows in-memory-only for this phase).
-final cartProvider = StateNotifierProvider<CartNotifier, CartState>((ref) {
-  return CartNotifier();
-});
+export 'package:scanserve/features/customer_menu/state/cart_state.dart';
 
 class CartNotifier extends StateNotifier<CartState> {
   CartNotifier() : super(const CartState());
 
-  /// Whether adding from [restaurantSlug] would mix restaurants in the
-  /// current cart. The menu screen checks this BEFORE calling addItem,
-  /// and shows a confirm dialog if true - this notifier never silently
-  /// merges carts across restaurants.
-  bool wouldConflict(String restaurantSlug) => state.belongsToAnotherRestaurant(restaurantSlug);
+  bool wouldConflict(String restaurantSlug) {
+    return state.belongsToAnotherRestaurant(restaurantSlug);
+  }
 
-  void addItem(MenuItem item, {required String restaurantSlug, required String restaurantName}) {
-    final items = [...state.items];
-    final index = items.indexWhere((cartItem) => cartItem.menuItemId == item.id);
+  void addItem(
+    MenuItem item, {
+    required String restaurantSlug,
+    required String restaurantName,
+    MenuItemVariant? variant,
+  }) {
+    final priceStr = variant != null ? variant.price : item.price;
+    final variantId = variant?.id;
+    final variantName = variant?.name;
 
-    if (index >= 0) {
-      items[index] = items[index].copyWith(quantity: items[index].quantity + 1);
+    final existingIndex = state.items.indexWhere(
+      (c) => c.matchesLine(
+        item.id,
+        targetVariantId: variantId,
+        targetVariantName: variantName,
+      ),
+    );
+
+    final List<CartItem> updated;
+    if (existingIndex == -1) {
+      updated = [
+        ...state.items,
+        CartItem(
+          menuItemId: item.id,
+          name: item.name,
+          price: priceStr,
+          quantity: 1,
+          imageUrl: item.imageUrl,
+          variantId: variantId,
+          variantName: variantName,
+        ),
+      ];
     } else {
-      items.add(CartItem(
-        menuItemId: item.id,
-        name: item.name,
-        price: item.price,
-        imageUrl: item.imageUrl,
-        quantity: 1,
-      ));
+      updated = [
+        for (int i = 0; i < state.items.length; i++)
+          if (i == existingIndex)
+            state.items[i].copyWith(quantity: state.items[i].quantity + 1)
+          else
+            state.items[i],
+      ];
     }
 
-    state = CartState(restaurantSlug: restaurantSlug, restaurantName: restaurantName, items: items);
+    state = CartState(
+      restaurantSlug: restaurantSlug,
+      restaurantName: restaurantName,
+      items: updated,
+    );
   }
 
-  void incrementItem(String menuItemId) {
-    final items = [
-      for (final item in state.items)
-        item.menuItemId == menuItemId ? item.copyWith(quantity: item.quantity + 1) : item,
-    ];
-    state = CartState(restaurantSlug: state.restaurantSlug, restaurantName: state.restaurantName, items: items);
+  void incrementItem(String menuItemId, {String? variantId, String? variantName}) {
+    state = CartState(
+      restaurantSlug: state.restaurantSlug,
+      restaurantName: state.restaurantName,
+      items: [
+        for (final item in state.items)
+          if (item.matchesLine(menuItemId, targetVariantId: variantId, targetVariantName: variantName))
+            item.copyWith(quantity: item.quantity + 1)
+          else
+            item,
+      ],
+    );
   }
 
-  /// Decrementing to zero removes the item entirely (Phase 5 spec).
-  void decrementItem(String menuItemId) {
-    final items = <CartItem>[];
+  void decrementItem(String menuItemId, {String? variantId, String? variantName}) {
+    final updated = <CartItem>[];
     for (final item in state.items) {
-      if (item.menuItemId != menuItemId) {
-        items.add(item);
-        continue;
+      if (!item.matchesLine(menuItemId, targetVariantId: variantId, targetVariantName: variantName)) {
+        updated.add(item);
+      } else if (item.quantity > 1) {
+        updated.add(item.copyWith(quantity: item.quantity - 1));
       }
-      if (item.quantity > 1) items.add(item.copyWith(quantity: item.quantity - 1));
-      // quantity would become 0 - drop it (don't add to the new list).
     }
-    state = CartState(restaurantSlug: state.restaurantSlug, restaurantName: state.restaurantName, items: items);
+
+    if (updated.isEmpty) {
+      state = const CartState();
+    } else {
+      state = CartState(
+        restaurantSlug: state.restaurantSlug,
+        restaurantName: state.restaurantName,
+        items: updated,
+      );
+    }
   }
 
-  void removeItem(String menuItemId) {
-    final items = state.items.where((item) => item.menuItemId != menuItemId).toList();
-    state = CartState(restaurantSlug: state.restaurantSlug, restaurantName: state.restaurantName, items: items);
+  void removeItem(String menuItemId, {String? variantId, String? variantName}) {
+    final updated = state.items
+        .where(
+          (item) => !item.matchesLine(
+            menuItemId,
+            targetVariantId: variantId,
+            targetVariantName: variantName,
+          ),
+        )
+        .toList();
+    if (updated.isEmpty) {
+      state = const CartState();
+    } else {
+      state = CartState(
+        restaurantSlug: state.restaurantSlug,
+        restaurantName: state.restaurantName,
+        items: updated,
+      );
+    }
   }
 
-  void clear() => state = const CartState();
+  void clear() {
+    state = const CartState();
+  }
 }
+
+final cartProvider = StateNotifierProvider<CartNotifier, CartState>((ref) {
+  return CartNotifier();
+});

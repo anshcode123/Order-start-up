@@ -2,8 +2,6 @@ const prisma = require('../lib/prisma');
 const { generateMenuQrDataUrl } = require('../services/qrService');
 
 // GET /api/restaurant/dashboard
-// Real counts for the authenticated Restaurant Admin's own restaurant
-// only - Phase 4 spec #19 ("Do not show fake statistics").
 async function getRestaurantAdminDashboard(req, res, next) {
   try {
     const restaurantId = req.user.restaurantId;
@@ -30,9 +28,6 @@ async function getRestaurantAdminDashboard(req, res, next) {
 }
 
 // GET /api/restaurant/qr
-// Same QR image the Super Admin sees at
-// GET /api/admin/restaurants/:id/qr, but self-service: the restaurant
-// is always the caller's own (req.user.restaurantId), never a param.
 async function getOwnRestaurantQr(req, res, next) {
   try {
     const restaurant = await prisma.restaurant.findUnique({
@@ -55,8 +50,6 @@ async function getOwnRestaurantQr(req, res, next) {
 }
 
 // GET /api/restaurant/settings
-// Fetches the authenticated restaurant admin's restaurant settings.
-// Strictly scoped to req.user.restaurantId.
 async function getRestaurantSettings(req, res, next) {
   try {
     const restaurant = await prisma.restaurant.findUnique({
@@ -80,6 +73,8 @@ async function getRestaurantSettings(req, res, next) {
         whatsappNumber: restaurant.whatsappNumber,
         logoUrl: restaurant.logoUrl,
         isActive: restaurant.isActive,
+        requireTableNumber:
+          restaurant.requireTableNumber === undefined ? true : Boolean(restaurant.requireTableNumber),
       },
     });
   } catch (err) {
@@ -88,8 +83,6 @@ async function getRestaurantSettings(req, res, next) {
 }
 
 // PUT /api/restaurant/settings
-// Updates settings for the authenticated restaurant admin's restaurant.
-// Strictly scoped to req.user.restaurantId - never trusts a restaurantId from body or params.
 async function updateRestaurantSettings(req, res, next) {
   try {
     const restaurant = await prisma.restaurant.findUnique({
@@ -108,6 +101,7 @@ async function updateRestaurantSettings(req, res, next) {
       address,
       logoUrl,
       isActive,
+      requireTableNumber,
     } = req.body;
 
     const data = {};
@@ -143,7 +137,6 @@ async function updateRestaurantSettings(req, res, next) {
     if (whatsappNumber !== undefined) {
       const trimmed = typeof whatsappNumber === 'string' ? whatsappNumber.trim() : '';
       if (trimmed) {
-        // Validate digits length (E.164 permits 7 to 15 digits)
         const digits = trimmed.replace(/\D/g, '');
         if (digits.length < 7 || digits.length > 15) {
           return res.status(400).json({
@@ -161,6 +154,10 @@ async function updateRestaurantSettings(req, res, next) {
 
     if (isActive !== undefined) {
       data.isActive = Boolean(isActive);
+    }
+
+    if (requireTableNumber !== undefined) {
+      data.requireTableNumber = Boolean(requireTableNumber);
     }
 
     const updated = await prisma.restaurant.update({
@@ -182,6 +179,8 @@ async function updateRestaurantSettings(req, res, next) {
         whatsappNumber: updated.whatsappNumber,
         logoUrl: updated.logoUrl,
         isActive: updated.isActive,
+        requireTableNumber:
+          updated.requireTableNumber === undefined ? true : Boolean(updated.requireTableNumber),
       },
     });
   } catch (err) {
@@ -190,7 +189,6 @@ async function updateRestaurantSettings(req, res, next) {
 }
 
 // POST /api/restaurant/settings/logo
-// Uploads restaurant logo to Cloudinary and saves URL to the restaurant record.
 async function uploadLogo(req, res, next) {
   try {
     if (!req.file) {
